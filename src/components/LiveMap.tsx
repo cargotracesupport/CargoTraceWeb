@@ -14,27 +14,24 @@ export interface MapMarker {
   kind?: "truck" | "origin" | "dest";
 }
 
-const COLORS: Record<NonNullable<MapMarker["kind"]>, string> = {
-  truck: "#00e676",
-  origin: "#40c4ff",
-  dest: "#ffb74d",
+// Dimensional "3D-style" map markers: a green truck for the live vehicle, a blue
+// warehouse for the pickup (origin), an amber person pin for the customer (dest).
+// Two-tone shading + a ground-shadow ellipse give each a placed-on-the-map feel.
+const MARKER_SVG: Record<NonNullable<MapMarker["kind"]>, string> = {
+  truck:
+    '<svg width="46" height="38" viewBox="0 0 46 38" xmlns="http://www.w3.org/2000/svg"><ellipse cx="23" cy="34.5" rx="16" ry="2.8" fill="rgba(0,0,0,0.22)"/><rect x="3" y="9" width="24" height="16" rx="2" fill="#00c853"/><rect x="3" y="9" width="24" height="4.5" rx="2" fill="#1aff90"/><path d="M27 13h6.5l5.5 5.5V25H27z" fill="#00a14e"/><path d="M27 13h6.5l5.5 5.5H27z" fill="#0bbf63"/><rect x="30" y="15" width="6.5" height="4.8" rx="1" fill="#cdeffd"/><rect x="3" y="24.5" width="36" height="2.2" fill="#00733a"/><circle cx="12.5" cy="28" r="4.2" fill="#16212c"/><circle cx="12.5" cy="28" r="1.6" fill="#9fb1c0"/><circle cx="32" cy="28" r="4.2" fill="#16212c"/><circle cx="32" cy="28" r="1.6" fill="#9fb1c0"/></svg>',
+  origin:
+    '<svg width="44" height="42" viewBox="0 0 44 42" xmlns="http://www.w3.org/2000/svg"><ellipse cx="22" cy="38.5" rx="16" ry="2.8" fill="rgba(0,0,0,0.22)"/><path d="M4 18 22 7 40 18Z" fill="#2a86b8"/><path d="M22 7 40 18 22 18Z" fill="#1f6f9e"/><rect x="7" y="18" width="30" height="18" fill="#40c4ff"/><rect x="30" y="18" width="7" height="18" fill="#2f9bd1"/><rect x="14.5" y="23" width="12" height="13" rx="1" fill="#0e3a57"/><rect x="14.5" y="25" width="12" height="1.5" fill="#15527d"/><rect x="14.5" y="28.5" width="12" height="1.5" fill="#15527d"/><rect x="14.5" y="32" width="12" height="1.5" fill="#15527d"/></svg>',
+  dest:
+    '<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg"><ellipse cx="16" cy="39" rx="6.5" ry="2.4" fill="rgba(0,0,0,0.22)"/><path d="M16 1.5C8 1.5 2.5 7.4 2.5 14.2 2.5 23 16 36 16 36S29.5 23 29.5 14.2C29.5 7.4 24 1.5 16 1.5Z" fill="#ffb74d"/><path d="M26.6 7C28.4 9 29.5 11.5 29.5 14.2 29.5 23 16 36 16 36 18.4 28 24 21 26 16.5 27.6 12.8 27.2 9.4 26.6 7Z" fill="#ef9f2c"/><circle cx="16" cy="11.5" r="3.6" fill="#fff"/><path d="M9.5 21.5a6.5 6 0 0 1 13 0Z" fill="#fff"/></svg>',
 };
 
-const TRUCK_SVG =
-  '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="6.5" width="11" height="9" rx="1.5"/><path d="M12.5 9.5h4l3.5 3.5v2.5h-7.5z"/><circle cx="6" cy="18" r="1.9"/><circle cx="16.5" cy="18" r="1.9"/></svg>';
-
-/** Build a marker element: a truck badge for the live vehicle, a dot for origin/dest. */
+/** Build a dimensional 3D-style marker element for the given point. */
 function makeMarkerEl(m: MapMarker): HTMLElement {
   const el = document.createElement("div");
-  const kind = m.kind ?? "truck";
-  const color = COLORS[kind];
-  if (kind === "truck") {
-    el.className = "ct-truck-marker";
-    el.style.cssText = `width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${color};border:2.5px solid #fff;color:#0a2a14;cursor:pointer;`;
-    el.innerHTML = TRUCK_SVG;
-  } else {
-    el.style.cssText = `width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;background:${color};box-shadow:0 0 0 4px ${color}33;cursor:pointer;`;
-  }
+  el.style.cssText =
+    "cursor:pointer;line-height:0;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.25));";
+  el.innerHTML = MARKER_SVG[m.kind ?? "truck"];
   if (m.label) el.title = m.label;
   return el;
 }
@@ -155,7 +152,10 @@ export default function LiveMap({
       seen.add(m.id);
       let marker = markersRef.current.get(m.id);
       if (!marker) {
-        marker = new maplibregl.Marker({ element: makeMarkerEl(m) })
+        marker = new maplibregl.Marker({
+          element: makeMarkerEl(m),
+          anchor: "bottom",
+        })
           .setLngLat([m.lng, m.lat])
           .addTo(map);
         markersRef.current.set(m.id, marker);
