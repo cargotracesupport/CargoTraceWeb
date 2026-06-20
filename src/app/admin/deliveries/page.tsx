@@ -20,6 +20,46 @@ function fmtDate(iso: string | null): string {
   });
 }
 
+function originOf(d: DeliveryRow) {
+  return d.origin_lat != null && d.origin_lng != null
+    ? { lat: d.origin_lat, lng: d.origin_lng }
+    : null;
+}
+function destOf(d: DeliveryRow) {
+  return d.dest_lat != null && d.dest_lng != null
+    ? { lat: d.dest_lat, lng: d.dest_lng }
+    : null;
+}
+
+function Th({
+  children,
+  className = "",
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <th
+      className={`whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-[1.2px] text-muted2 ${className}`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function RowActions({ d }: { d: DeliveryRow }) {
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <SimulateButton deliveryId={d.id} origin={originOf(d)} dest={destOf(d)} />
+      <DeleteButton
+        table="deliveries"
+        id={d.id}
+        confirmText="Delete this delivery? This removes its tracking history."
+      />
+    </div>
+  );
+}
+
 export default async function AdminDeliveriesPage() {
   const supabase = createClient();
   const { data } = await supabase
@@ -31,7 +71,7 @@ export default async function AdminDeliveriesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Deliveries</h1>
           <p className="text-sm text-muted2">
@@ -51,90 +91,123 @@ export default async function AdminDeliveriesPage() {
           </Link>
         </div>
       ) : (
-        <div className="ct-card overflow-x-auto">
-          <table className="w-full min-w-[860px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-left">
-                <th className="ct-label mb-0 px-4 py-3">Reference</th>
-                <th className="ct-label mb-0 px-4 py-3">Route</th>
-                <th className="ct-label mb-0 px-4 py-3">Customer</th>
-                <th className="ct-label mb-0 px-4 py-3">Status</th>
-                <th className="ct-label mb-0 px-4 py-3">Driver</th>
-                <th className="ct-label mb-0 px-4 py-3">Created</th>
-                <th className="ct-label mb-0 px-4 py-3">Tracking</th>
-                <th className="ct-label mb-0 px-4 py-3">Simulate</th>
-                <th className="ct-label mb-0 px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {deliveries.map((d) => (
-                <tr key={d.id} className="transition-colors hover:bg-s2">
-                  <td className="px-4 py-3">
-                    <p className="font-mono font-medium">{d.reference ?? "—"}</p>
+        <>
+          {/* Desktop: table */}
+          <div className="ct-card hidden overflow-hidden lg:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left">
+                    <Th>Reference</Th>
+                    <Th>Route</Th>
+                    <Th>Customer</Th>
+                    <Th>Status</Th>
+                    <Th>Driver</Th>
+                    <Th>Created</Th>
+                    <Th>Tracking</Th>
+                    <Th className="text-right">Actions</Th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {deliveries.map((d) => (
+                    <tr key={d.id} className="transition-colors hover:bg-s2/60">
+                      <td className="px-4 py-3 align-top">
+                        <p className="font-mono font-medium">
+                          {d.reference ?? "—"}
+                        </p>
+                        <p className="max-w-[200px] truncate text-xs text-muted2">
+                          {d.goods}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <div className="flex items-center gap-1.5 text-xs">
+                          <span className="max-w-[140px] truncate text-text">
+                            {d.origin_label ?? "—"}
+                          </span>
+                          <span className="text-muted">→</span>
+                          <span className="max-w-[140px] truncate text-green">
+                            {d.dest_label ?? "—"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 align-top text-muted2">
+                        {d.customer_name ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <DeliveryStatusBadge status={d.status} />
+                      </td>
+                      <td className="px-4 py-3 align-top text-muted2">
+                        {d.driver?.full_name ?? (
+                          <span className="text-muted">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 align-top font-mono text-xs text-muted">
+                        {fmtDate(d.created_at)}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <Link
+                          href={`/track/${d.tracking_token}`}
+                          target="_blank"
+                          className="font-mono text-xs text-blue hover:underline"
+                        >
+                          /track/{d.tracking_token.slice(0, 8)}…
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        <RowActions d={d} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile / tablet: cards */}
+          <div className="flex flex-col gap-3 lg:hidden">
+            {deliveries.map((d) => (
+              <div key={d.id} className="ct-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm font-medium">
+                      {d.reference ?? "—"}
+                    </p>
                     <p className="truncate text-xs text-muted2">{d.goods}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <span className="truncate text-text">
-                        {d.origin_label ?? "—"}
-                      </span>
-                      <span className="text-muted">→</span>
-                      <span className="truncate text-green">
-                        {d.dest_label ?? "—"}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted2">
-                    {d.customer_name ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <DeliveryStatusBadge status={d.status} />
-                  </td>
-                  <td className="px-4 py-3 text-muted2">
-                    {d.driver?.full_name ?? (
-                      <span className="text-muted">Unassigned</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs text-muted">
+                  </div>
+                  <DeliveryStatusBadge status={d.status} />
+                </div>
+
+                <div className="mt-3 flex items-center gap-1.5 text-sm">
+                  <span className="min-w-0 truncate">{d.origin_label ?? "—"}</span>
+                  <span className="shrink-0 text-muted">→</span>
+                  <span className="min-w-0 truncate text-green">
+                    {d.dest_label ?? "—"}
+                  </span>
+                </div>
+
+                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted">
+                  <span className="truncate">
+                    {d.customer_name ?? "No customer"}
+                  </span>
+                  <span className="shrink-0 font-mono">
                     {fmtDate(d.created_at)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link
-                      href={`/track/${d.tracking_token}`}
-                      target="_blank"
-                      className="font-mono text-xs text-blue hover:underline"
-                      title={`/track/${d.tracking_token}`}
-                    >
-                      /track/{d.tracking_token.slice(0, 8)}…
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <SimulateButton
-                      deliveryId={d.id}
-                      origin={
-                        d.origin_lat != null && d.origin_lng != null
-                          ? { lat: d.origin_lat, lng: d.origin_lng }
-                          : null
-                      }
-                      dest={
-                        d.dest_lat != null && d.dest_lng != null
-                          ? { lat: d.dest_lat, lng: d.dest_lng }
-                          : null
-                      }
-                    />
-                  </td>
-                  <td className="px-4 py-3">
-                    <DeleteButton
-                      table="deliveries"
-                      id={d.id}
-                      confirmText="Delete this delivery? This removes its tracking history."
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+                  <Link
+                    href={`/track/${d.tracking_token}`}
+                    target="_blank"
+                    className="font-mono text-xs text-blue hover:underline"
+                  >
+                    Tracking link
+                  </Link>
+                  <RowActions d={d} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
