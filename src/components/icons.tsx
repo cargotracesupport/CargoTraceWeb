@@ -167,6 +167,21 @@ export const Moon = (p: IconProps) => (
   </Svg>
 );
 
+export const Eye = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </Svg>
+);
+
+export const EyeOff = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M9.9 5.2A9.6 9.6 0 0 1 12 5c6.4 0 10 7 10 7a16 16 0 0 1-3.2 3.8M6.2 6.2A16 16 0 0 0 2 12s3.6 7 10 7a9.6 9.6 0 0 0 4-.85" />
+    <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    <path d="m3 3 18 18" />
+  </Svg>
+);
+
 export const Play = ({ className = "h-5 w-5", ...rest }: IconProps) => (
   <svg
     viewBox="0 0 24 24"
@@ -183,7 +198,8 @@ export const Play = ({ className = "h-5 w-5", ...rest }: IconProps) => (
 export function BrandMark({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <span
-      className={`inline-flex items-center justify-center rounded-xl bg-green text-on-accent shadow-[var(--ct-shadow-accent)] ${className}`}
+      className={`inline-flex items-center justify-center rounded-2xl text-white shadow-[var(--ct-shadow-accent)] ${className}`}
+      style={{ backgroundImage: "var(--grad-primary)" }}
     >
       <Truck className="h-[58%] w-[58%]" strokeWidth={2.4} />
     </span>
@@ -194,7 +210,7 @@ export function BrandMark({ className = "h-9 w-9" }: { className?: string }) {
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
     <span className={`font-semibold tracking-tight ${className}`}>
-      Cargo<span className="text-green">Trace</span>
+      Cargo<span className="text-gradient">Trace</span>
     </span>
   );
 }
@@ -223,8 +239,8 @@ export function Avatar({
         width: size,
         height: size,
         fontSize: Math.round(size * 0.38),
-        color: "#001018",
-        background: "linear-gradient(135deg, #00e676, #40c4ff)",
+        color: "#fff",
+        backgroundImage: "var(--grad-primary)",
       }}
       aria-hidden
     >
@@ -237,8 +253,8 @@ export function Avatar({
 export function LiveDot({ className = "" }: { className?: string }) {
   return (
     <span className={`relative inline-flex h-2 w-2 ${className}`}>
-      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-70" />
-      <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70" />
+      <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
     </span>
   );
 }

@@ -118,7 +118,7 @@ export default async function DriverDeliveryPage({
         ← Back to deliveries
       </Link>
 
-      <div className="ct-card flex flex-col gap-3">
+      <div className="ct-card flex flex-col gap-3 p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="font-mono text-sm font-medium">{delivery.reference}</p>

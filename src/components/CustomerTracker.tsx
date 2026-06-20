@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
-import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import { BrandMark, Wordmark, Check, MapPin, Flag } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
 import { estimateEtaMinutes, formatEta } from "@/lib/eta";
@@ -127,96 +126,125 @@ export default function CustomerTracker({
       : null;
 
   return (
-    <main className="min-h-dvh bg-bg text-text flex flex-col">
-      {/* Header */}
-      <header className="px-4 py-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <BrandMark className="h-7 w-7" />
-          <Wordmark className="text-lg" />
+    <main className="min-h-dvh text-text flex flex-col">
+      {/* ── Gradient hero ─────────────────────────────────────── */}
+      <header className="relative overflow-hidden px-4 pb-16 pt-5 text-white">
+        <div
+          aria-hidden
+          className="absolute inset-0 -z-10"
+          style={{ backgroundImage: "var(--grad-primary)" }}
+        />
+        <div
+          aria-hidden
+          className="absolute inset-0 -z-10 opacity-40"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 88% -10%, rgba(255,255,255,.55), transparent 45%)",
+          }}
+        />
+
+        <div className="mx-auto flex w-full max-w-2xl items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
+              <BrandMark className="h-8 w-8" />
+            </span>
+            <Wordmark className="text-lg text-white [&_.text-gradient]:!bg-none [&_.text-gradient]:!text-white" />
+          </div>
+          <div className="flex items-center gap-2">
+            <ThemeToggle className="border-white/25 bg-white/10 text-white hover:bg-white/20" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide backdrop-blur">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-white" />
+              {status.replace("_", " ")}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
-          <DeliveryStatusBadge status={status} />
+
+        {/* ETA / status headline */}
+        <div className="mx-auto mt-8 w-full max-w-2xl">
+          <p className="text-[11px] font-semibold uppercase tracking-[2px] text-white/70">
+            {isDelivered
+              ? "Delivery complete"
+              : hasPosition
+                ? "Arriving in"
+                : "Preparing your delivery"}
+          </p>
+          {isDelivered ? (
+            <div className="mt-1 flex items-center gap-2 text-4xl font-extrabold tracking-tight">
+              <Check className="h-8 w-8" strokeWidth={3} /> Delivered
+            </div>
+          ) : hasPosition ? (
+            <div className="mt-1 flex items-end gap-3">
+              <span className="font-mono text-5xl font-bold leading-none">
+                {formatEta(etaMin)}
+              </span>
+              <span className="pb-1 text-sm text-white/75">
+                updated {fmtTime(delivery.last_position_at) || "—"}
+              </span>
+            </div>
+          ) : (
+            <div className="mt-1 text-2xl font-bold tracking-tight">
+              On its way soon
+            </div>
+          )}
+          <p className="mt-2 text-sm text-white/80">
+            {delivery.goods}
+            {delivery.customer_name ? <> · for {delivery.customer_name}</> : null}
+          </p>
         </div>
       </header>
 
-      <div className="flex-1 flex flex-col gap-4 p-4 max-w-2xl w-full mx-auto">
-        {/* Delivery summary */}
-        <section className="ct-card p-4">
-          <div className="text-muted2 text-xs uppercase tracking-wide">
-            Tracking
-          </div>
-          <div className="font-mono text-lg mt-0.5">{delivery.reference}</div>
-          <div className="text-text mt-2">{delivery.goods}</div>
-          {delivery.customer_name && (
-            <div className="text-muted2 text-sm mt-1">
-              For {delivery.customer_name}
+      {/* ── Content (overlaps hero) ───────────────────────────── */}
+      <div className="mx-auto -mt-10 flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pb-6">
+        {/* Route + reference */}
+        <section className="ct-card p-5" style={{ boxShadow: "var(--ct-shadow-pop)" }}>
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted2">
+              Tracking number
             </div>
+            <div className="font-mono text-sm font-medium text-primary">
+              {delivery.reference}
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-0">
+            <div className="flex items-start gap-3">
+              <div className="flex flex-col items-center">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <MapPin className="h-4 w-4" />
+                </span>
+                <span className="my-1 h-6 w-px border-l border-dashed border-border2" />
+              </div>
+              <div className="pt-1">
+                <div className="text-[11px] uppercase tracking-wide text-muted2">
+                  From
+                </div>
+                <div className="text-sm font-medium">{delivery.origin_label}</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-accent">
+                <Flag className="h-4 w-4" />
+              </span>
+              <div className="pt-1">
+                <div className="text-[11px] uppercase tracking-wide text-muted2">
+                  To
+                </div>
+                <div className="text-sm font-medium">{delivery.dest_label}</div>
+              </div>
+            </div>
+          </div>
+
+          {!hasPosition && !isDelivered && (
+            <p className="mt-4 rounded-xl bg-s2 px-3 py-2 text-xs text-muted2">
+              This page updates automatically the moment your delivery starts
+              moving.
+            </p>
           )}
-
-          <div className="mt-4 grid grid-cols-1 gap-2 text-sm">
-            <div className="flex items-start gap-2">
-              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue" />
-              <div>
-                <div className="text-muted2 text-xs">From</div>
-                <div>{delivery.origin_label}</div>
-              </div>
-            </div>
-            <div className="flex items-start gap-2">
-              <Flag className="mt-0.5 h-4 w-4 shrink-0 text-green" />
-              <div>
-                <div className="text-muted2 text-xs">To</div>
-                <div>{delivery.dest_label}</div>
-              </div>
-            </div>
-          </div>
         </section>
-
-        {/* Status / ETA banner */}
-        {isDelivered ? (
-          <section className="ct-card p-5 text-center border-green/40 bg-green/5">
-            <div className="flex items-center justify-center gap-2 text-2xl font-semibold text-green">
-              <Check className="h-6 w-6" /> Delivered
-            </div>
-            <p className="text-muted2 mt-1">
-              Your delivery has arrived
-              {delivery.delivered_at ? (
-                <> on {fmtTime(delivery.delivered_at)}</>
-              ) : null}
-              .
-            </p>
-          </section>
-        ) : hasPosition ? (
-          <section className="ct-card p-5 flex items-center justify-between">
-            <div>
-              <div className="text-muted2 text-xs uppercase tracking-wide">
-                Estimated arrival
-              </div>
-              <div className="text-3xl font-semibold text-green mt-1">
-                {formatEta(etaMin)}
-              </div>
-            </div>
-            <div className="text-right text-xs text-muted2">
-              <div>Updated</div>
-              <div className="font-mono text-text">
-                {fmtTime(delivery.last_position_at) || "—"}
-              </div>
-            </div>
-          </section>
-        ) : (
-          <section className="ct-card p-5 text-center">
-            <div className="text-lg font-medium">
-              Waiting for the driver to start…
-            </div>
-            <p className="text-muted2 mt-1 text-sm">
-              This page updates automatically once your delivery is on the move.
-            </p>
-          </section>
-        )}
 
         {/* Live map */}
         <section className="ct-card overflow-hidden p-0">
-          <div className="h-[55vh] min-h-[320px] w-full">
+          <div className="h-[52vh] min-h-[320px] w-full">
             {markers.length > 0 ? (
               <LiveMap
                 markers={markers}
@@ -226,15 +254,15 @@ export default function CustomerTracker({
                 className="h-full w-full"
               />
             ) : (
-              <div className="h-full w-full flex items-center justify-center text-muted2 text-sm">
+              <div className="flex h-full w-full items-center justify-center text-sm text-muted2">
                 Map will appear once locations are available.
               </div>
             )}
           </div>
         </section>
 
-        <p className="text-center text-muted2 text-xs pb-2">
-          Live tracking by Cargo<span className="text-green">Trace</span>
+        <p className="pb-2 text-center text-xs text-muted2">
+          Live tracking by <Wordmark className="font-semibold" />
         </p>
       </div>
     </main>

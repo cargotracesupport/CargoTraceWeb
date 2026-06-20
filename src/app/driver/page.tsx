@@ -20,7 +20,7 @@ export default async function DriverHomePage() {
       </div>
 
       {deliveries.length === 0 ? (
-        <div className="ct-card flex flex-col items-center gap-2 py-12 text-center">
+        <div className="ct-card flex flex-col items-center gap-2 px-5 py-12 text-center">
           <p className="text-sm text-muted2">No deliveries assigned yet.</p>
         </div>
       ) : (
@@ -29,7 +29,7 @@ export default async function DriverHomePage() {
             <li key={d.id}>
               <Link
                 href={`/driver/deliveries/${d.id}`}
-                className="ct-card block transition-colors hover:border-green/60"
+                className="ct-card block p-4 transition-colors hover:border-primary/60"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">

@@ -4,8 +4,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Data (coordinates, IDs, ETA, stats, timestamps) renders in DM Mono with
-   tabular figures so numbers never shift width — per the design system. */
 .font-mono {
   font-variant-numeric: tabular-nums;
 }
@@ -16,18 +14,16 @@ body {
 }
 
 body {
-  background: var(--app-bg);
-  background-attachment: fixed;
+  background: rgb(var(--c-bg));
   color: rgb(var(--c-text));
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: rgb(var(--c-green) / 0.25);
+  background: rgb(var(--c-primary) / 0.22);
 }
 
-/* Thin, refined scrollbars */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -42,63 +38,145 @@ body {
   background: transparent;
 }
 
-/* Visible keyboard focus everywhere */
 :focus-visible {
-  outline: 2px solid rgb(var(--c-green) / 0.7);
+  outline: 2px solid rgb(var(--c-primary) / 0.8);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 6px;
+}
+
+/* ── Aurora background blobs ─────────────────────────────────── */
+.ct-aurora {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.5;
+  will-change: transform;
+}
+html.dark .ct-aurora {
+  opacity: 0.4;
+}
+.ct-aurora-1 {
+  width: 48vw;
+  height: 48vw;
+  left: -10vw;
+  top: -12vw;
+  background: radial-gradient(circle, rgb(var(--c-primary)), transparent 70%);
+  animation: ct-drift-a 26s ease-in-out infinite;
+}
+.ct-aurora-2 {
+  width: 44vw;
+  height: 44vw;
+  right: -8vw;
+  top: -10vw;
+  background: radial-gradient(circle, rgb(var(--c-primary-2)), transparent 70%);
+  animation: ct-drift-b 32s ease-in-out infinite;
+}
+.ct-aurora-3 {
+  width: 42vw;
+  height: 42vw;
+  right: 4vw;
+  bottom: -16vw;
+  opacity: 0.38;
+  background: radial-gradient(circle, #14b8a6, transparent 70%);
+  animation: ct-drift-a 36s ease-in-out infinite reverse;
+}
+.ct-aurora-4 {
+  width: 40vw;
+  height: 40vw;
+  left: 0;
+  bottom: -14vw;
+  opacity: 0.34;
+  background: radial-gradient(circle, #6366f1, transparent 70%);
+  animation: ct-drift-b 30s ease-in-out infinite reverse;
+}
+@keyframes ct-drift-a {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(6vw, 5vh) scale(1.12);
+  }
+}
+@keyframes ct-drift-b {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-5vw, 4vh) scale(1.1);
+  }
 }
 
 @layer components {
-  /* Surfaces */
+  /* Glass surfaces */
   .ct-card {
-    @apply rounded-xl border border-border/90 bg-s1/85 backdrop-blur-sm;
+    @apply rounded-[var(--ct-radius-xl)] border border-border/70 bg-s1/70 backdrop-blur-xl;
     box-shadow: var(--ct-shadow-card);
   }
   .ct-stat {
-    @apply ct-card flex flex-col gap-1 p-4 transition-colors duration-200 hover:border-border2;
+    @apply ct-card flex flex-col gap-1 p-5 transition-all duration-200 hover:-translate-y-0.5;
   }
 
   /* Inputs */
   .ct-input {
-    @apply w-full rounded-lg border border-border2 bg-s2/80 px-3.5 py-2.5 text-sm text-text outline-none
-           transition-[border-color,box-shadow] duration-200 placeholder:text-muted
-           focus:border-green focus:shadow-[var(--ct-focus-shadow)];
+    @apply w-full rounded-xl border border-border2 bg-s1/70 px-4 py-3 text-sm text-text outline-none backdrop-blur
+           transition placeholder:text-muted focus:border-primary;
+  }
+  .ct-input:focus {
+    box-shadow: var(--ct-focus-shadow);
   }
   .ct-label {
-    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[1.2px] text-muted2;
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[1px] text-muted2;
   }
 
   /* Buttons */
   .ct-btn {
-    @apply inline-flex select-none items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
-           transition-[transform,background-color,border-color,color,box-shadow] duration-150
-           active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green/60
-           disabled:pointer-events-none disabled:opacity-50;
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold
+           transition-all duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-primary/60 disabled:pointer-events-none disabled:opacity-50;
   }
   .ct-btn-primary {
-    @apply ct-btn bg-green text-on-accent shadow-[var(--ct-shadow-accent)] hover:bg-green-hover;
+    @apply ct-btn text-on-accent;
+    background-image: var(--grad-primary);
+    box-shadow: var(--ct-shadow-accent);
+  }
+  .ct-btn-primary:hover {
+    filter: brightness(1.07) saturate(1.05);
   }
   .ct-btn-ghost {
-    @apply ct-btn border border-border2 bg-s2/40 text-muted2 hover:border-green/50 hover:bg-s2 hover:text-text;
+    @apply ct-btn border border-border2 bg-s1/50 text-muted2 backdrop-blur
+           hover:border-primary/50 hover:text-text;
   }
 
-  /* Status pills */
+  /* Pills */
   .ct-pill {
     @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide;
   }
 
-  /* Sidebar / nav item */
+  /* Nav */
   .ct-nav {
-    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted2
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted2
            transition-colors duration-150 hover:bg-s2 hover:text-text;
   }
   .ct-nav-active {
-    @apply bg-green/10 text-green;
+    @apply bg-primary/10 text-primary;
   }
 }
 
-/* Respect users who prefer less motion */
+/* Gradient text + glass utilities */
+.text-gradient {
+  background-image: var(--grad-primary);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.glass {
+  background: rgb(var(--c-s1) / 0.65);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgb(var(--c-border) / 0.7);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -120,13 +198,12 @@ body {
 .maplibregl-ctrl-group {
   background: rgb(var(--c-s1) / 0.92) !important;
   border: 1px solid rgb(var(--c-border2)) !important;
-  border-radius: 8px !important;
+  border-radius: 10px !important;
   overflow: hidden;
 }
 .maplibregl-ctrl-group button + button {
   border-top: 1px solid rgb(var(--c-border2)) !important;
 }
-/* Invert the dark control glyphs only in dark mode */
 html.dark .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
   filter: invert(1) hue-rotate(180deg) brightness(1.1);
 }

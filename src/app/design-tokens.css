@@ -1,91 +1,86 @@
 /* ───────────────────────────────────────────────────────────────
-   CargoTrace Design System — themeable tokens.
+   CargoTrace — Aurora design system tokens.
    Colors are RGB triplets so Tailwind can apply opacity (`/10`, `/85`).
-   :root = LIGHT theme (default).  html.dark = DARK theme.
+   :root = LIGHT (default).  html.dark = DARK.
+   Brand: tracking-blue -> cyan gradient + orange accent.
+   Status hues (green/amber/red/blue) are kept for delivery semantics.
    ─────────────────────────────────────────────────────────────── */
 :root {
   color-scheme: light;
 
-  /* Surfaces */
-  --c-bg: 244 246 249;
+  /* Surfaces (cool near-white) */
+  --c-bg: 246 248 255;
   --c-s1: 255 255 255;
-  --c-s2: 238 241 246;
-  --c-s3: 228 233 240;
-  --c-border: 224 230 238;
-  --c-border2: 203 213 225;
+  --c-s2: 240 244 251;
+  --c-s3: 230 236 246;
+  --c-border: 224 231 242;
+  --c-border2: 201 213 232;
 
-  /* Signal accent (deeper green for contrast on light) */
-  --c-green: 0 135 74;
-  --c-green-hover: 8 153 84;
+  /* Brand / primary (blue -> cyan) + accent (orange) */
+  --c-primary: 37 99 235;
+  --c-primary-2: 6 150 199;
+  --c-accent: 234 88 12;
 
-  /* Status hues (darkened for readable text on light) */
+  /* Status hues */
+  --c-green: 0 150 80;
   --c-amber: 194 102 8;
   --c-red: 220 38 38;
-  --c-blue: 2 132 199;
+  --c-blue: 37 99 235;
 
   /* Text */
-  --c-text: 22 32 43;
-  --c-muted2: 81 96 110;
-  --c-muted: 140 156 172;
+  --c-text: 16 23 39;
+  --c-muted2: 71 85 105;
+  --c-muted: 140 156 176;
   --c-on-accent: 255 255 255;
 
-  /* Page + map backgrounds */
-  --app-bg: radial-gradient(
-      1100px 520px at 50% -8%,
-      rgba(0, 135, 74, 0.06),
-      transparent 60%
-    ),
-    #f4f6f9;
-  --map-bg: #e8edf2;
+  --map-bg: #e9eefb;
 
-  /* ── Design-system constants (theme-agnostic) ── */
-  --ct-font-sans: var(--font-dm-sans), "DM Sans", system-ui, sans-serif;
-  --ct-font-mono: var(--font-dm-mono), "DM Mono", "JetBrains Mono", ui-monospace,
-    "SFMono-Regular", Menlo, monospace;
-  --ct-radius-sm: 5px;
-  --ct-radius-md: 6px;
-  --ct-radius-lg: 8px;
-  --ct-radius-xl: 12px;
-  --ct-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.03),
-    0 10px 30px -16px rgba(0, 0, 0, 0.25);
-  --ct-shadow-pop: 0 24px 60px -20px rgba(20, 40, 60, 0.35);
-  --ct-shadow-accent: 0 8px 22px -10px rgba(0, 135, 74, 0.45);
-  /* Theme-aware (resolves --c-green per active theme) */
-  --ct-focus-shadow: 0 0 0 3px rgb(var(--c-green) / 0.16);
+  /* Gradients + effects */
+  --grad-primary: linear-gradient(
+    135deg,
+    rgb(var(--c-primary)),
+    rgb(var(--c-primary-2))
+  );
+  --grad-accent: linear-gradient(135deg, rgb(var(--c-accent)), 244 114 60);
+  --ct-font-sans: var(--font-jakarta), "Plus Jakarta Sans", system-ui, sans-serif;
+  --ct-font-mono: var(--font-dm-mono), "DM Mono", ui-monospace, Menlo, monospace;
+  --ct-radius-lg: 14px;
+  --ct-radius-xl: 20px;
+  --ct-shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.6) inset,
+    0 18px 40px -22px rgb(15 30 70 / 0.35);
+  --ct-shadow-pop: 0 30px 70px -24px rgb(15 30 70 / 0.4);
+  --ct-shadow-accent: 0 12px 30px -10px rgb(var(--c-primary) / 0.5);
+  --ct-focus-shadow: 0 0 0 3px rgb(var(--c-primary) / 0.22);
 }
 
 html.dark {
   color-scheme: dark;
 
-  --c-bg: 7 9 13;
-  --c-s1: 13 17 24;
-  --c-s2: 17 24 34;
-  --c-s3: 22 32 48;
-  --c-border: 26 42 56;
-  --c-border2: 31 50 69;
+  --c-bg: 7 11 20;
+  --c-s1: 15 21 34;
+  --c-s2: 20 28 45;
+  --c-s3: 29 39 58;
+  --c-border: 32 44 66;
+  --c-border2: 46 61 88;
 
-  --c-green: 0 230 118;
-  --c-green-hover: 26 255 144;
+  --c-primary: 96 165 250;
+  --c-primary-2: 34 211 238;
+  --c-accent: 251 146 60;
 
+  --c-green: 0 220 130;
   --c-amber: 255 183 77;
-  --c-red: 255 82 82;
-  --c-blue: 64 196 255;
+  --c-red: 255 99 99;
+  --c-blue: 96 165 250;
 
-  --c-text: 221 230 239;
-  --c-muted2: 106 138 158;
-  --c-muted: 61 84 102;
-  --c-on-accent: 0 0 0;
+  --c-text: 226 232 240;
+  --c-muted2: 148 163 184;
+  --c-muted: 100 116 139;
+  --c-on-accent: 6 12 24;
 
-  --app-bg: radial-gradient(
-      1100px 520px at 50% -8%,
-      rgba(0, 230, 118, 0.06),
-      transparent 60%
-    ),
-    #07090d;
-  --map-bg: #060d14;
+  --map-bg: #060b16;
 
-  --ct-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.03),
-    0 10px 30px -16px rgba(0, 0, 0, 0.7);
-  --ct-shadow-pop: 0 32px 80px rgba(0, 0, 0, 0.7);
-  --ct-shadow-accent: 0 8px 22px -10px rgba(0, 230, 118, 0.7);
+  --ct-shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.04) inset,
+    0 18px 44px -22px rgb(0 0 0 / 0.7);
+  --ct-shadow-pop: 0 36px 90px -20px rgb(0 0 0 / 0.75);
+  --ct-shadow-accent: 0 12px 30px -10px rgb(var(--c-primary) / 0.55);
 }

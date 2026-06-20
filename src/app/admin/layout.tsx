@@ -18,7 +18,7 @@ export default async function AdminLayout({
           <div className="flex items-center gap-2.5">
             <BrandMark className="h-8 w-8" />
             <Wordmark className="text-base" />
-            <span className="ct-pill ml-1 hidden bg-green/10 text-green sm:inline-flex">
+            <span className="ct-pill ml-1 hidden bg-primary/10 text-primary sm:inline-flex">
               <LiveDot />
               LIVE
             </span>

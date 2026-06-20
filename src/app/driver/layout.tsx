@@ -25,7 +25,7 @@ export default async function DriverLayout({
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <span className="ct-pill bg-green/10 text-green">
+            <span className="ct-pill bg-primary/10 text-primary">
               <LiveDot /> TX
             </span>
             <span className="hidden max-w-[40vw] truncate text-sm text-muted2 sm:inline">

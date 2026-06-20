@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { DM_Sans, DM_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, DM_Mono } from "next/font/google";
 import "./globals.css";
+import AuroraBg from "@/components/AuroraBg";
 
-const dmSans = DM_Sans({
+// Premium modern UI typeface (display + body).
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-dm-sans",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-jakarta",
 });
 
 // Data font — coordinates, IDs, ETA, stats, timestamps. Per the design system,
@@ -32,13 +34,16 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${dmSans.variable} ${dmMono.variable}`}
+      className={`${jakarta.variable} ${dmMono.variable}`}
       suppressHydrationWarning
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInit }} />
       </head>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        <AuroraBg />
+        {children}
+      </body>
     </html>
   );
 }

@@ -14,8 +14,10 @@ const config: Config = {
         s3: v("--c-s3"),
         border: v("--c-border"),
         border2: v("--c-border2"),
+        primary: v("--c-primary"),
+        primary2: v("--c-primary-2"),
+        accent: v("--c-accent"),
         green: v("--c-green"),
-        "green-hover": v("--c-green-hover"),
         amber: v("--c-amber"),
         red: v("--c-red"),
         blue: v("--c-blue"),
@@ -25,7 +27,7 @@ const config: Config = {
         "on-accent": v("--c-on-accent"),
       },
       fontFamily: {
-        sans: ["var(--font-dm-sans)", "system-ui", "sans-serif"],
+        sans: ["var(--font-jakarta)", "system-ui", "sans-serif"],
         mono: [
           "var(--font-dm-mono)",
           "DM Mono",

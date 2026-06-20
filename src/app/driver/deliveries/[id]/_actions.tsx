@@ -40,7 +40,7 @@ export default function DriverActions({
   }
 
   return (
-    <div className="ct-card flex flex-col gap-3">
+    <div className="ct-card flex flex-col gap-3 p-4">
       {status === "assigned" ? (
         <button
           type="button"
