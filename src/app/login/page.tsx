@@ -68,7 +68,10 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="ct-card p-5 sm:p-6 shadow-xl shadow-black/40">
+        <div
+          className="ct-card p-5 sm:p-6"
+          style={{ boxShadow: "var(--ct-shadow-pop)" }}
+        >
           <h2 className="mb-5 text-center text-sm font-semibold text-text">
             Sign in to your account
           </h2>

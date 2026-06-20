@@ -1,0 +1,64 @@
+/* ───────────────────────────────────────────────────────────────
+   CargoTrace Design System — canonical tokens.
+   Imported from the Claude Design handoff (project 467442bc).
+   Tailwind utilities mirror these values; this file is the source of truth.
+   ─────────────────────────────────────────────────────────────── */
+:root {
+  /* Surfaces */
+  --ct-bg: #07090d;
+  --ct-s1: #0d1118;
+  --ct-s2: #111822;
+  --ct-s3: #162030;
+  --ct-border: #1a2a38;
+  --ct-border-2: #1f3245;
+
+  /* Signal accent */
+  --ct-green: #00e676;
+  --ct-green-hover: #1aff90;
+  --ct-green-dim: rgba(0, 230, 118, 0.08);
+
+  /* Status hues */
+  --ct-amber: #ffb74d;
+  --ct-red: #ff5252;
+  --ct-blue: #40c4ff;
+
+  /* Text */
+  --ct-text: #dde6ef;
+  --ct-muted-2: #6a8a9e;
+  --ct-muted: #3d5466;
+  --ct-on-accent: #000000;
+  --ct-focus-ring: rgba(0, 230, 118, 0.16);
+  --ct-map-bg: #060d14;
+
+  /* Type */
+  --ct-font-sans: var(--font-dm-sans), "DM Sans", system-ui, sans-serif;
+  --ct-font-mono: var(--font-dm-mono), "DM Mono", "JetBrains Mono", ui-monospace,
+    "SFMono-Regular", Menlo, monospace;
+  --ct-tracking-tight: -0.5px;
+  --ct-tracking-label: 1.2px;
+  --ct-tracking-eyebrow: 2px;
+
+  /* Radii */
+  --ct-radius-sm: 5px;
+  --ct-radius-md: 6px;
+  --ct-radius-lg: 8px;
+  --ct-radius-xl: 12px;
+  --ct-radius-pill: 999px;
+
+  /* Effects */
+  --ct-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.03),
+    0 10px 30px -16px rgba(0, 0, 0, 0.7);
+  --ct-shadow-pop: 0 32px 80px rgba(0, 0, 0, 0.7);
+  --ct-shadow-accent: 0 8px 22px -10px rgba(0, 230, 118, 0.7);
+  --ct-focus-shadow: 0 0 0 3px var(--ct-focus-ring);
+  --ct-glow-green: radial-gradient(
+    1100px 520px at 50% -8%,
+    rgba(0, 230, 118, 0.06),
+    transparent 60%
+  );
+
+  /* Layout chrome */
+  --ct-topbar-h: 56px;
+  --ct-sidebar-w: 208px;
+  --ct-hit: 44px;
+}

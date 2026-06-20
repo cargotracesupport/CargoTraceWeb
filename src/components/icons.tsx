@@ -186,6 +186,40 @@ export function Wordmark({ className = "" }: { className?: string }) {
   );
 }
 
+/** User avatar — initials on a green→blue gradient (matches the design system). */
+export function Avatar({
+  name = "",
+  size = 30,
+  className = "",
+}: {
+  name?: string;
+  size?: number;
+  className?: string;
+}) {
+  const initials =
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase())
+      .join("") || "?";
+  return (
+    <span
+      className={`inline-flex shrink-0 items-center justify-center rounded-full font-bold ${className}`}
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.round(size * 0.38),
+        color: "#001018",
+        background: "linear-gradient(135deg, #00e676, #40c4ff)",
+      }}
+      aria-hidden
+    >
+      {initials}
+    </span>
+  );
+}
+
 /** Animated live dot. */
 export function LiveDot({ className = "" }: { className?: string }) {
   return (

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
-import { BrandMark, Wordmark, LogOut } from "@/components/icons";
+import { BrandMark, Wordmark, LogOut, LiveDot } from "@/components/icons";
 
 export default async function DriverLayout({
   children,
@@ -13,12 +13,20 @@ export default async function DriverLayout({
     <div className="min-h-screen bg-bg text-text flex flex-col">
       <header className="sticky top-0 z-20 border-b border-border bg-s1/95 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          <Link href="/driver" className="flex items-center gap-2">
-            <BrandMark className="h-7 w-7" />
-            <Wordmark className="text-sm" />
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/driver" className="flex items-center gap-2">
+              <BrandMark className="h-7 w-7" />
+              <Wordmark className="text-sm" />
+            </Link>
+            <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-muted2 sm:inline">
+              Driver
+            </span>
+          </div>
           <div className="flex items-center gap-3">
-            <span className="max-w-[40vw] truncate text-sm text-muted2">
+            <span className="ct-pill bg-green/10 text-green">
+              <LiveDot /> TX
+            </span>
+            <span className="hidden max-w-[40vw] truncate text-sm text-muted2 sm:inline">
               {session.profile.full_name}
             </span>
             <form action="/api/auth/signout" method="post">

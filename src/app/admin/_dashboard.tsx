@@ -119,9 +119,32 @@ export default function Dashboard({
 
       {/* Map + active list */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <div className="ct-card overflow-hidden">
+        <div className="ct-card relative overflow-hidden">
           <div className="h-[60vh] w-full lg:h-[calc(100vh-16rem)]">
             <LiveMap markers={markers} fit />
+          </div>
+          {/* Status legend (design system overlay) */}
+          <div className="pointer-events-none absolute bottom-3 left-3 z-[1] rounded-md border border-border2 bg-s1/90 px-3 py-2 backdrop-blur">
+            <div className="mb-1.5 text-[9px] font-bold uppercase tracking-[1.5px] text-muted2">
+              Status
+            </div>
+            {(
+              [
+                ["Moving", "bg-green"],
+                ["Idle", "bg-amber"],
+                ["Offline", "bg-muted"],
+              ] as const
+            ).map(([label, dot]) => (
+              <div
+                key={label}
+                className="mb-1 flex items-center gap-2 text-[11px] text-muted2 last:mb-0"
+              >
+                <span
+                  className={`h-2 w-2 rounded-full border-[1.5px] border-white ${dot}`}
+                />
+                {label}
+              </div>
+            ))}
           </div>
         </div>
 
