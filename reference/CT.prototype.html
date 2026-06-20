@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CargoTrace – Live GPS Tracking</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+:root {
+  --bg: #07090d;
+  --s1: #0d1118;
+  --s2: #111822;
+  --s3: #162030;
+  --border: #1a2a38;
+  --border2: #1f3245;
+  --green: #00e676;
+  --green-dim: rgba(0,230,118,0.08);
+  --amber: #ffb74d;
+  --amber-dim: rgba(255,183,77,0.1);
+  --red: #ff5252;
+  --red-dim: rgba(255,82,82,0.1);
+  --blue: #40c4ff;
+  --blue-dim: rgba(64,196,255,0.08);
+  --text: #dde6ef;
+  --muted: #3d5466;
+  --muted2: #6a8a9e;
+  --topbar-h: 52px;
+  --sidebar-w: 200px;
+  --bottombar-h: 56px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;}
+
+/* ── SCREENS ── */
+.screen{display:none;width:100%;height:100vh;height:100dvh;}
+.screen.active{display:flex;}
+
+/* ════════════════════════════
+   LOGIN SCREEN
+════════════════════════════ */
+#login-screen{
+  align-items:center;justify-content:center;
+  flex-direction:column;
+  background:var(--bg);position:relative;overflow:hidden;
+}
+.login-bg-grid{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size:48px 48px;opacity:0.25;
+}
+.login-glow{
+  position:absolute;
+  width:600px;height:600px;border-radius:50%;
+  background:radial-gradient(circle, rgba(0,230,118,0.05) 0%, transparent 70%);
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  pointer-events:none;
+}
+.login-card{
+  position:relative;z-index:2;
+  width:min(420px, 94vw);
+  background:var(--s1);
+  border:1px solid var(--border2);
+  border-radius:8px;
+  overflow:hidden;
+  box-shadow:0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,230,118,0.04);
+}
+.login-card-top{
+  background:var(--s2);border-bottom:1px solid var(--border);
+  padding:24px 28px;
+}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:18px;}
+.brand-hex{
+  width:40px;height:40px;background:var(--green);
+  display:flex;align-items:center;justify-content:center;
+  clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
+  font-size:18px;flex-shrink:0;
+}
+.brand-name{font-family:'DM Sans',sans-serif;font-size:22px;font-weight:700;letter-spacing:-0.5px;}
+.brand-name span{color:var(--green);}
+.brand-tag{font-size:10px;color:var(--muted2);letter-spacing:2px;text-transform:uppercase;margin-top:2px;}
+.login-subtitle{font-size:11px;font-weight:600;color:var(--muted2);text-transform:uppercase;letter-spacing:2px;}
+
+.login-card-body{padding:24px 28px;}
+
+.role-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:22px;
+}
+.role-btn{
+  padding:11px 8px;border-radius:6px;
+  border:1px solid var(--border2);background:var(--s2);
+  color:var(--muted2);cursor:pointer;text-align:center;
+  font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;
+  transition:all 0.18s;user-select:none;
+}
+.role-btn:active{transform:scale(0.97);}
+.role-btn:hover{border-color:var(--green);color:var(--text);}
+.role-btn.selected{border-color:var(--green);background:var(--green-dim);color:var(--green);}
+.role-icon{font-size:20px;display:block;margin-bottom:5px;}
+
+.field{margin-bottom:14px;}
+.field label{
+  display:block;font-size:10px;font-weight:600;letter-spacing:1.5px;
+  text-transform:uppercase;color:var(--muted2);margin-bottom:7px;
+}
+.field input{
+  width:100%;background:var(--s2);border:1px solid var(--border2);
+  border-radius:6px;padding:12px 14px;color:var(--text);
+  font-family:'DM Sans',sans-serif;font-size:15px;outline:none;
+  transition:border-color 0.2s;
+}
+.field input:focus{border-color:var(--green);}
+.field input::placeholder{color:var(--muted);}
+
+.login-btn{
+  width:100%;padding:13px;background:var(--green);color:#000;
+  border:none;border-radius:6px;cursor:pointer;
+  font-family:'DM Sans',sans-serif;font-size:15px;font-weight:700;
+  letter-spacing:0.5px;transition:all 0.18s;margin-top:6px;
+}
+.login-btn:hover{background:#00ff87;}
+.login-btn:active{transform:scale(0.98);}
+
+.role-note{
+  margin-top:14px;text-align:center;font-size:11px;color:var(--muted);
+  font-family:'DM Mono',monospace;
+}
+
+/* ════════════════════════════
+   TOPBAR
+════════════════════════════ */
+.topbar{
+  position:fixed;top:0;left:0;right:0;height:var(--topbar-h);
+  background:var(--s1);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;z-index:300;
+  padding:0 16px;gap:12px;
+}
+.topbar-brand{
+  font-family:'DM Sans',sans-serif;font-size:18px;font-weight:700;
+  letter-spacing:-0.5px;white-space:nowrap;
+}
+.topbar-brand span{color:var(--green);}
+.tb-sep{width:1px;height:24px;background:var(--border);}
+.live-badge{
+  display:flex;align-items:center;gap:6px;
+  font-family:'DM Mono',monospace;font-size:11px;color:var(--green);
+  white-space:nowrap;
+}
+.live-dot{
+  width:7px;height:7px;border-radius:50%;background:var(--green);
+  animation:pulse 1.5s ease infinite;flex-shrink:0;
+}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(0,230,118,0.5)}50%{opacity:0.8;box-shadow:0 0 0 5px rgba(0,230,118,0)}}
+.tb-spacer{flex:1;}
+.role-tag{
+  font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;
+  padding:3px 8px;border-radius:4px;white-space:nowrap;
+}
+.role-tag.admin{background:rgba(255,82,82,0.15);color:var(--red);}
+.role-tag.dispatcher{background:rgba(64,196,255,0.12);color:var(--blue);}
+.role-tag.viewer{background:rgba(255,183,77,0.12);color:var(--amber);}
+.user-av{
+  width:30px;height:30px;border-radius:50%;
+  background:linear-gradient(135deg,#00e676,#00b0ff);
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;color:#000;flex-shrink:0;
+}
+.logout-btn{
+  padding:6px 10px;background:transparent;border:1px solid var(--border2);
+  border-radius:5px;color:var(--muted2);cursor:pointer;font-size:12px;
+  font-family:'DM Sans',sans-serif;transition:all 0.18s;white-space:nowrap;
+}
+.logout-btn:hover{border-color:var(--red);color:var(--red);}
+/* Hamburger */
+.ham-btn{
+  width:36px;height:36px;border:1px solid var(--border2);
+  border-radius:6px;background:var(--s2);
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;cursor:pointer;flex-shrink:0;
+}
+.ham-btn span{width:16px;height:2px;background:var(--muted2);border-radius:2px;transition:all 0.2s;}
+
+/* ════════════════════════════
+   SIDEBAR
+════════════════════════════ */
+.sidebar{
+  position:fixed;top:var(--topbar-h);left:0;bottom:0;width:var(--sidebar-w);
+  background:var(--s1);border-right:1px solid var(--border);
+  z-index:200;display:flex;flex-direction:column;
+  padding:14px 0;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+}
+.sidebar-overlay{
+  display:none;position:fixed;inset:0;top:var(--topbar-h);
+  background:rgba(0,0,0,0.6);z-index:199;
+  backdrop-filter:blur(2px);
+}
+.nav-section{
+  font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;
+  color:var(--muted);padding:12px 18px 5px;
+}
+.nav-item{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 18px;cursor:pointer;
+  font-size:13px;font-weight:500;color:var(--muted2);
+  transition:all 0.15s;border-left:3px solid transparent;
+  user-select:none;
+}
+.nav-item:hover{background:var(--s2);color:var(--text);}
+.nav-item.active{background:var(--green-dim);color:var(--green);border-left-color:var(--green);}
+.nav-icon{font-size:16px;width:20px;text-align:center;}
+
+/* ════════════════════════════
+   MAIN CONTENT
+════════════════════════════ */
+#app-screen{flex-direction:column;}
+.main-content{
+  margin-top:var(--topbar-h);
+  margin-left:var(--sidebar-w);
+  flex:1;display:flex;flex-direction:column;
+  height:calc(100dvh - var(--topbar-h));overflow:hidden;
+  transition:margin-left 0.28s;
+}
+.view-panel{display:none;flex:1;flex-direction:column;height:100%;overflow:hidden;}
+.view-panel.active{display:flex;}
+
+/* ════════════════════════════
+   MAP AREA
+════════════════════════════ */
+.map-area{flex:1;position:relative;overflow:hidden;background:#060d14;}
+#leaflet-map{position:absolute;inset:0;z-index:1;}
+
+.map-controls{
+  position:absolute;top:14px;right:14px;
+  display:flex;flex-direction:column;gap:6px;z-index:1000;
+}
+.map-ctrl-btn{
+  width:36px;height:36px;background:rgba(13,17,23,0.95);
+  border:1px solid var(--border2);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:15px;transition:all 0.18s;
+  backdrop-filter:blur(8px);
+}
+.map-ctrl-btn:hover{border-color:var(--green);background:var(--green-dim);}
+.map-ctrl-btn:active{transform:scale(0.93);}
+
+.map-stats-strip{
+  position:absolute;top:14px;left:14px;
+  display:flex;gap:7px;z-index:1000;flex-wrap:wrap;
+  max-width:calc(100% - 70px);
+}
+.map-stat{
+  background:rgba(13,17,23,0.92);border:1px solid var(--border2);
+  border-radius:6px;padding:7px 12px;backdrop-filter:blur(8px);
+  font-family:'DM Mono',monospace;
+}
+.map-stat-val{font-size:16px;font-weight:700;line-height:1;}
+.map-stat-lbl{font-size:9px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;margin-top:2px;}
+
+.map-legend{
+  position:absolute;bottom:14px;left:14px;
+  background:rgba(13,17,23,0.92);border:1px solid var(--border2);
+  border-radius:6px;padding:10px 14px;backdrop-filter:blur(8px);z-index:1000;
+}
+.legend-title{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted2);margin-bottom:7px;}
+.legend-item{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted2);margin-bottom:4px;}
+.legend-item:last-child{margin-bottom:0;}
+.legend-dot{width:9px;height:9px;border-radius:50%;border:2px solid #fff;flex-shrink:0;}
+
+/* ════════════════════════════
+   VEHICLE MARKERS
+════════════════════════════ */
+.v-marker{
+  position:absolute;display:flex;flex-direction:column;align-items:center;
+  cursor:pointer;transition:transform 0.2s;
+  animation:vfloat 4s ease-in-out infinite;
+}
+.v-marker:hover,.v-marker:active{transform:scale(1.2) !important;}
+@keyframes vfloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.v-dot{width:14px;height:14px;border-radius:50%;border:2.5px solid #fff;position:relative;z-index:2;}
+.v-ring{
+  position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid;
+  animation:vring 2.5s ease-out infinite;top:0;left:0;
+}
+@keyframes vring{0%{transform:scale(1);opacity:0.8;}100%{transform:scale(3.5);opacity:0;}}
+.v-tail{width:2px;height:8px;margin-bottom:0;}
+.v-label{
+  font-family:'DM Mono',monospace;font-size:9px;font-weight:700;
+  background:rgba(6,13,20,0.9);border:1px solid;
+  padding:2px 5px;border-radius:3px;margin-top:3px;white-space:nowrap;
+}
+
+/* ════════════════════════════
+   BOTTOM VEHICLE TABLE
+════════════════════════════ */
+.bottom-strip{
+  height:200px;background:var(--s1);
+  border-top:1px solid var(--border);
+  overflow:hidden;display:flex;flex-direction:column;
+  transition:height 0.25s;
+}
+.bottom-strip.collapsed{height:40px;}
+.strip-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 16px;border-bottom:1px solid var(--border);flex-shrink:0;
+  cursor:pointer;user-select:none;
+}
+.strip-title{
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;
+  letter-spacing:0.5px;text-transform:uppercase;color:var(--text);
+  display:flex;align-items:center;gap:8px;
+}
+.strip-toggle{font-size:10px;color:var(--muted2);transition:transform 0.25s;}
+.strip-toggle.flipped{transform:rotate(180deg);}
+.strip-actions{display:flex;gap:6px;}
+.strip-btn{
+  padding:5px 10px;border-radius:5px;border:1px solid var(--border2);
+  background:transparent;color:var(--muted2);cursor:pointer;
+  font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;
+  transition:all 0.18s;
+}
+.strip-btn:hover{border-color:var(--green);color:var(--green);}
+.strip-btn.primary{background:var(--green);color:#000;border-color:var(--green);font-weight:600;}
+.strip-btn.primary:hover{background:#00ff87;}
+.vehicle-table{overflow-y:auto;flex:1;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;min-width:600px;}
+thead th{
+  padding:7px 14px;text-align:left;
+  font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;
+  color:var(--muted);background:var(--s2);position:sticky;top:0;z-index:1;
+  white-space:nowrap;
+}
+tbody tr{border-bottom:1px solid rgba(26,42,56,0.5);cursor:pointer;transition:background 0.15s;}
+tbody tr:hover{background:var(--s2);}
+td{padding:8px 14px;vertical-align:middle;}
+.vid{font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:var(--green);}
+.vname{font-size:12px;font-weight:500;}
+.vdriver{font-size:11px;color:var(--muted2);margin-top:1px;}
+.coords{font-family:'DM Mono',monospace;font-size:10px;color:var(--blue);}
+.speed-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:700;}
+.last-up{font-size:11px;color:var(--muted2);}
+.status-pill{
+  display:inline-flex;align-items:center;gap:5px;
+  font-size:10px;font-weight:600;padding:3px 8px;border-radius:4px;
+  letter-spacing:0.5px;text-transform:uppercase;white-space:nowrap;
+}
+.status-pill .dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.moving{background:var(--green-dim);color:var(--green);}
+.moving .dot{background:var(--green);}
+.idle{background:var(--amber-dim);color:var(--amber);}
+.idle .dot{background:var(--amber);}
+.offline{background:rgba(74,96,114,0.12);color:var(--muted2);}
+.offline .dot{background:var(--muted);}
+.signal-bar{display:flex;align-items:flex-end;gap:2px;height:13px;}
+.sig{width:4px;border-radius:1px;background:var(--border2);}
+.sig.on{background:var(--green);}
+.sig:nth-child(1){height:4px;}
+.sig:nth-child(2){height:7px;}
+.sig:nth-child(3){height:10px;}
+.sig:nth-child(4){height:13px;}
+
+/* ════════════════════════════
+   VEHICLE DETAIL PANEL
+════════════════════════════ */
+.detail-panel{
+  position:fixed;top:var(--topbar-h);right:0;
+  bottom:0;width:min(300px, 100vw);
+  background:var(--s1);border-left:1px solid var(--border);
+  transform:translateX(100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  z-index:250;display:flex;flex-direction:column;overflow:hidden;
+}
+.detail-panel.open{transform:translateX(0);}
+.dp-overlay{
+  display:none;position:fixed;inset:0;top:var(--topbar-h);
+  background:rgba(0,0,0,0.5);z-index:249;backdrop-filter:blur(2px);
+}
+.dp-header{
+  padding:14px 16px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-shrink:0;
+}
+.dp-vid-badge{
+  display:flex;align-items:center;gap:8px;
+}
+.dp-title{font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--green);}
+.dp-close{
+  width:30px;height:30px;background:var(--s2);border:1px solid var(--border2);
+  border-radius:6px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:14px;color:var(--muted2);transition:all 0.18s;flex-shrink:0;
+}
+.dp-close:hover{border-color:var(--red);color:var(--red);}
+.dp-body{padding:14px 16px;overflow-y:auto;flex:1;}
+.dp-map-mini{
+  height:110px;background:var(--s2);border:1px solid var(--border);
+  border-radius:6px;margin-bottom:14px;
+  position:relative;overflow:hidden;
+}
+.dp-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:9px 0;border-bottom:1px solid rgba(26,42,56,0.5);gap:8px;
+}
+.dp-row:last-child{border-bottom:none;}
+.dp-lbl{font-size:10px;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;flex-shrink:0;}
+.dp-val{font-size:13px;font-weight:500;text-align:right;}
+.dp-val.mono{font-family:'DM Mono',monospace;font-size:11px;color:var(--blue);}
+.dp-val.green{color:var(--green);}
+.history-bar{display:flex;gap:2px;margin-top:6px;align-items:flex-end;}
+.hb{width:7px;border-radius:2px;background:var(--border2);}
+.hb.on{background:var(--green);}
+
+/* ════════════════════════════
+   ADD VEHICLE VIEW
+════════════════════════════ */
+.form-view{
+  padding:24px;background:var(--bg);overflow-y:auto;
+  align-items:flex-start;
+}
+.form-card{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:8px;padding:24px;width:100%;max-width:480px;
+}
+.form-view-title{
+  font-family:'DM Sans',sans-serif;font-size:20px;font-weight:700;
+  margin-bottom:20px;color:var(--text);
+}
+.success-toast{
+  display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:var(--green);color:#000;
+  padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px;
+  z-index:9999;box-shadow:0 8px 24px rgba(0,230,118,0.3);
+  animation:toastIn 0.3s ease;
+}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+/* ════════════════════════════
+   USERS VIEW
+════════════════════════════ */
+.users-table-wrap{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:8px;width:100%;max-width:700px;overflow:hidden;
+}
+.users-table-wrap table{min-width:auto;}
+
+/* ════════════════════════════
+   DRIVER SCREEN
+════════════════════════════ */
+#driver-screen{flex-direction:column;background:var(--bg);}
+.driver-topbar{
+  height:52px;background:var(--s1);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 16px;gap:10px;flex-shrink:0;
+}
+.driver-topbar-title{font-family:'DM Sans',sans-serif;font-size:18px;font-weight:700;}
+.driver-topbar-title span{color:var(--green);}
+.driver-body{
+  flex:1;display:grid;grid-template-columns:1fr 300px;
+  overflow:hidden;min-height:0;
+}
+.driver-map{background:#060d14;position:relative;overflow:hidden;}
+.driver-sidebar{
+  background:var(--s1);border-left:1px solid var(--border);
+  overflow-y:auto;padding:16px;
+  display:flex;flex-direction:column;gap:12px;
+}
+.device-card{
+  background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:14px;
+}
+.device-card-title{
+  font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;
+  text-transform:uppercase;color:var(--muted2);margin-bottom:10px;
+}
+.stat-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:7px 0;border-bottom:1px solid rgba(26,42,56,0.4);
+}
+.stat-row:last-child{border-bottom:none;}
+.stat-row-label{font-size:12px;color:var(--muted2);}
+.stat-row-val{font-family:'DM Mono',monospace;font-size:12px;font-weight:700;}
+.gps-coord-box{
+  background:var(--bg);border:1px solid var(--border);border-radius:5px;
+  padding:10px 12px;margin-bottom:10px;
+}
+.coord-label{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted2);margin-bottom:5px;}
+.coord-val{font-family:'DM Mono',monospace;font-size:13px;color:var(--green);font-weight:700;}
+.coord-ts{font-size:10px;color:var(--muted);margin-top:3px;}
+.signal-full{
+  display:flex;align-items:center;gap:10px;
+  background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:10px 12px;
+}
+.sig-big{display:flex;align-items:flex-end;gap:3px;height:18px;}
+.sig-big .b{width:5px;border-radius:1px;background:var(--border2);}
+.sig-big .b.on{background:var(--green);}
+.sig-big .b:nth-child(1){height:5px;}
+.sig-big .b:nth-child(2){height:9px;}
+.sig-big .b:nth-child(3){height:13px;}
+.sig-big .b:nth-child(4){height:17px;}
+.sig-text{font-size:12px;font-weight:600;color:var(--green);}
+.sig-sub{font-size:10px;color:var(--muted2);}
+.device-info-row{
+  display:flex;align-items:center;justify-content:space-between;
+  font-size:11px;color:var(--muted2);padding:4px 0;
+}
+.device-info-val{font-family:'DM Mono',monospace;font-size:11px;color:var(--text);}
+@keyframes blink-cursor{0%,100%{opacity:1}50%{opacity:0}}
+.blink{animation:blink-cursor 1s step-end infinite;}
+
+/* ════════════════════════════
+   BOTTOM NAV (mobile driver)
+════════════════════════════ */
+.driver-bottom-nav{
+  display:none;height:var(--bottombar-h);background:var(--s1);
+  border-top:1px solid var(--border);
+  flex-shrink:0;
+}
+.dbn-inner{
+  display:flex;height:100%;
+}
+.dbn-btn{
+  flex:1;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:3px;cursor:pointer;
+  font-size:10px;color:var(--muted2);transition:color 0.15s;
+  font-family:'DM Sans',sans-serif;font-weight:500;
+}
+.dbn-btn.active{color:var(--green);}
+.dbn-btn span{font-size:18px;}
+
+/* ════════════════════════════
+   SCROLLBARS
+════════════════════════════ */
+::-webkit-scrollbar{width:3px;height:3px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+
+/* ════════════════════════════
+   FADE IN
+════════════════════════════ */
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeUp 0.3s ease both;}
+
+/* ════════════════════════════
+   LEAFLET OVERRIDES
+════════════════════════════ */
+.custom-leaflet-icon{background:none!important;border:none!important;}
+.leaflet-container{background:#060d14;}
+
+/* ════════════════════════════
+   RESPONSIVE — MOBILE
+════════════════════════════ */
+@media (max-width: 768px) {
+  :root{--topbar-h:52px;--sidebar-w:220px;}
+  .sidebar{transform:translateX(-100%);}
+  .sidebar.open{transform:translateX(0);}
+  .sidebar-overlay.open{display:block;}
+  .ham-btn{display:flex;}
+  .main-content{margin-left:0;}
+  /* hide text labels in topbar on small */
+  #user-name-label{display:none;}
+  .live-badge .live-text{display:none;}
+  .tb-sep{display:none;}
+
+  /* Detail panel full-screen on mobile */
+  .detail-panel{width:100vw;border-left:none;}
+  .dp-overlay.open{display:block;}
+
+  /* Bottom strip collapsible */
+  .bottom-strip{height:190px;}
+
+  /* Driver: stack vertically */
+  .driver-body{grid-template-columns:1fr;grid-template-rows:55vw 1fr;}
+  .driver-sidebar{display:none;}
+  .driver-sidebar.tab-active{display:flex;overflow-y:auto;max-height:none;}
+  .driver-bottom-nav{display:flex;}
+  .driver-map.tab-active{display:block;}
+}
+
+@media (max-width: 480px) {
+  .map-stats-strip{gap:5px;}
+  .map-stat{padding:6px 9px;}
+  .map-stat-val{font-size:14px;}
+  .login-card-body,.login-card-top{padding:20px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════
+     LOGIN SCREEN
+═══════════════════════════ -->
+<div id="login-screen" class="screen active">
+  <div class="login-bg-grid"></div>
+  <div class="login-glow"></div>
+  <div class="login-card fade-in">
+    <div class="login-card-top">
+      <div class="brand">
+        <div class="brand-hex">📡</div>
+        <div>
+          <div class="brand-name">Cargo<span>Trace</span></div>
+          <div class="brand-tag">GPS Fleet Intelligence</div>
+        </div>
+      </div>
+      <div class="login-subtitle">Select Role &amp; Sign In</div>
+    </div>
+    <div class="login-card-body">
+      <div class="role-grid">
+        <div class="role-btn selected" onclick="selectRole(this,'admin')">
+          <span class="role-icon">🔐</span>Admin
+        </div>
+        <div class="role-btn" onclick="selectRole(this,'dispatcher')">
+          <span class="role-icon">🖥️</span>Dispatcher
+        </div>
+        <div class="role-btn" onclick="selectRole(this,'viewer')">
+          <span class="role-icon">👁️</span>Viewer
+        </div>
+        <div class="role-btn" onclick="selectRole(this,'driver')">
+          <span class="role-icon">🚛</span>Driver
+        </div>
+      </div>
+      <div class="field">
+        <label>Username</label>
+        <input type="text" id="uname" placeholder="Enter your username" value="admin@cargotrace.io" autocomplete="username">
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="upass" placeholder="••••••••" value="password" autocomplete="current-password">
+      </div>
+      <button class="login-btn" onclick="doLogin()">ACCESS SYSTEM →</button>
+      <div class="role-note">ROLE: <span id="role-display" style="color:var(--green)">ADMIN</span> &nbsp;|&nbsp; v2.4.1</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════
+     APP SCREEN (Admin/Dispatcher/Viewer)
+═══════════════════════════ -->
+<div id="app-screen" class="screen" style="flex-direction:column">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="ham-btn" id="ham-btn" onclick="toggleSidebar()">
+      <span></span><span></span><span></span>
+    </div>
+    <div class="topbar-brand">Cargo<span>Trace</span></div>
+    <div class="tb-sep"></div>
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      <span class="live-text">LIVE</span>
+    </div>
+    <div class="tb-spacer"></div>
+    <span id="role-badge" class="role-tag admin">ADMIN</span>
+    <div class="user-av" id="user-av">JM</div>
+    <span id="user-name-label" style="font-size:13px;font-weight:500;">J. Miller</span>
+    <button class="logout-btn" onclick="doLogout()">Logout</button>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="app-sidebar">
+    <div class="nav-section">Fleet Tracking</div>
+    <div class="nav-item active" onclick="switchTab('map-view',this)">
+      <span class="nav-icon">🗺️</span> Live Map
+    </div>
+    <div class="nav-item" onclick="switchTab('add-vehicle-view',this)">
+      <span class="nav-icon">➕</span> Add Vehicle
+    </div>
+    <div class="nav-section admin-only" id="admin-section">System</div>
+    <div class="nav-item admin-only" onclick="switchTab('users-view',this)">
+      <span class="nav-icon">👥</span> Access Control
+    </div>
+  </div>
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+  <!-- MAIN CONTENT -->
+  <div class="main-content" id="main-content">
+
+    <!-- ── MAP VIEW ── -->
+    <div id="map-view" class="view-panel active">
+      <div class="map-area" id="main-map">
+        <div id="leaflet-map"></div>
+
+        <div class="map-controls">
+          <div class="map-ctrl-btn" title="Zoom In" onclick="mapZoom(1)">＋</div>
+          <div class="map-ctrl-btn" title="Zoom Out" onclick="mapZoom(-1)">－</div>
+          <div class="map-ctrl-btn" title="Center Fleet" onclick="mapCenter()">⊕</div>
+          <div class="map-ctrl-btn" title="Toggle Satellite" onclick="toggleLayer()">🛰️</div>
+        </div>
+
+        <div class="map-stats-strip">
+          <div class="map-stat">
+            <div class="map-stat-val" style="color:var(--green)" id="stat-online">4</div>
+            <div class="map-stat-lbl">Online</div>
+          </div>
+          <div class="map-stat">
+            <div class="map-stat-val" style="color:var(--amber)" id="stat-idle">1</div>
+            <div class="map-stat-lbl">Idle</div>
+          </div>
+          <div class="map-stat">
+            <div class="map-stat-val" style="color:var(--muted2)" id="stat-offline">1</div>
+            <div class="map-stat-lbl">Offline</div>
+          </div>
+          <div class="map-stat">
+            <div class="map-stat-val" id="stat-total">6</div>
+            <div class="map-stat-lbl">Total</div>
+          </div>
+        </div>
+
+        <div class="map-legend">
+          <div class="legend-title">Status</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Moving</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Idle</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--muted)"></div>Offline</div>
+        </div>
+      </div>
+
+      <!-- VEHICLE DETAIL PANEL -->
+      <div class="detail-panel" id="detail-panel">
+        <div class="dp-header">
+          <div class="dp-vid-badge">
+            <div class="dp-title" id="dp-vehicle-id">VH-001</div>
+            <span class="status-pill moving" id="dp-status-pill"><span class="dot"></span>MOVING</span>
+          </div>
+          <div class="dp-close" onclick="closeDetail()">✕</div>
+        </div>
+        <div class="dp-body">
+          <div class="dp-map-mini">
+            <svg width="100%" height="100%" viewBox="0 0 260 110">
+              <rect width="260" height="110" fill="#060d14"/>
+              <line x1="0" y1="55" x2="260" y2="55" stroke="#0f2030" stroke-width="1.5"/>
+              <line x1="130" y1="0" x2="130" y2="110" stroke="#0f2030" stroke-width="1.5"/>
+              <circle cx="130" cy="55" r="14" fill="rgba(0,230,118,0.12)" stroke="var(--green)" stroke-width="1.5"/>
+              <circle cx="130" cy="55" r="5" fill="var(--green)"/>
+              <circle cx="130" cy="55" r="22" fill="none" stroke="rgba(0,230,118,0.18)" stroke-width="1" stroke-dasharray="4,3"/>
+            </svg>
+            <div style="position:absolute;bottom:7px;right:8px;font-family:'DM Mono',monospace;font-size:9px;color:var(--green)">● LIVE GPS</div>
+          </div>
+          <div class="dp-row">
+            <div class="dp-lbl">Coordinates</div>
+            <div class="dp-val mono" id="dp-coords">14.5995°N, 120.9842°E</div>
+          </div>
+          <div class="dp-row">
+            <div class="dp-lbl">Speed</div>
+            <div class="dp-val green" id="dp-speed" style="font-family:'DM Mono',monospace">62 km/h</div>
+          </div>
+          <div class="dp-row">
+            <div class="dp-lbl">Heading</div>
+            <div class="dp-val mono" id="dp-heading">NNE · 032°</div>
+          </div>
+          <div class="dp-row">
+            <div class="dp-lbl">Driver</div>
+            <div class="dp-val" id="dp-driver">Ramon Dela Cruz</div>
+          </div>
+          <div class="dp-row">
+            <div class="dp-lbl">Device ID</div>
+            <div class="dp-val mono" id="dp-device">DEV-0412</div>
+          </div>
+          <div class="dp-row">
+            <div class="dp-lbl">Signal</div>
+            <div class="dp-val" id="dp-signal">
+              <div class="signal-bar">
+                <div class="sig on"></div><div class="sig on"></div>
+                <div class="sig on"></div><div class="sig on"></div>
+              </div>
+            </div>
+          </div>
+          <div class="dp-row">
+            <div class="dp-lbl">Last Update</div>
+            <div class="dp-val mono green" id="dp-ts">0s ago</div>
+          </div>
+          <div class="dp-row">
+            <div class="dp-lbl">Distance Today</div>
+            <div class="dp-val mono" id="dp-dist">148 km</div>
+          </div>
+          <div style="margin-top:14px">
+            <div class="dp-lbl" style="margin-bottom:7px">Activity Today</div>
+            <div class="history-bar">
+              <div class="hb on" style="height:20px"></div><div class="hb on" style="height:28px"></div>
+              <div class="hb on" style="height:18px"></div><div class="hb on" style="height:32px"></div>
+              <div class="hb on" style="height:24px"></div><div class="hb on" style="height:36px"></div>
+              <div class="hb on" style="height:20px"></div><div class="hb on" style="height:28px"></div>
+              <div class="hb on" style="height:30px"></div><div class="hb on" style="height:22px"></div>
+              <div class="hb" style="height:10px"></div><div class="hb" style="height:10px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="dp-overlay" id="dp-overlay" onclick="closeDetail()"></div>
+
+      <!-- BOTTOM STRIP -->
+      <div class="bottom-strip" id="bottom-strip">
+        <div class="strip-header" onclick="toggleBottomStrip()">
+          <div class="strip-title">
+            🚚 Fleet Vehicles
+            <span class="strip-toggle" id="strip-toggle">▲</span>
+          </div>
+          <div class="strip-actions" onclick="event.stopPropagation()">
+            <button class="strip-btn" id="export-btn" onclick="exportCSV()">⬇ Export</button>
+            <button class="strip-btn primary" id="add-device-btn" onclick="switchTab('add-vehicle-view', null)">+ Add</button>
+          </div>
+        </div>
+        <div class="vehicle-table">
+          <table>
+            <thead>
+              <tr>
+                <th>Vehicle</th><th>Name / Driver</th>
+                <th>Coordinates</th><th>Speed</th>
+                <th>Status</th><th>Signal</th><th>Updated</th>
+              </tr>
+            </thead>
+            <tbody id="vehicle-tbody">
+              <!-- filled by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /map-view -->
+
+    <!-- ── ADD VEHICLE VIEW ── -->
+    <div id="add-vehicle-view" class="view-panel form-view">
+      <div class="form-view-title">➕ Add New Vehicle</div>
+      <div class="form-card">
+        <div class="field">
+          <label>Vehicle Name / Model</label>
+          <input type="text" id="av-name" placeholder="e.g. Isuzu NHR">
+        </div>
+        <div class="field">
+          <label>Plate Number</label>
+          <input type="text" id="av-plate" placeholder="e.g. TRK-2291">
+        </div>
+        <div class="field">
+          <label>Driver Name</label>
+          <input type="text" id="av-driver" placeholder="e.g. Ramon Dela Cruz">
+        </div>
+        <div class="field">
+          <label>Device ID</label>
+          <input type="text" id="av-device" placeholder="e.g. DEV-0412">
+        </div>
+        <button class="login-btn" style="margin-top:16px;width:auto;padding:12px 28px;border-radius:6px" onclick="saveVehicle()">Save Vehicle</button>
+      </div>
+    </div>
+
+    <!-- ── USERS VIEW ── -->
+    <div id="users-view" class="view-panel form-view">
+      <div class="form-view-title">👥 Access Management</div>
+      <div class="users-table-wrap">
+        <table style="min-width:auto">
+          <thead>
+            <tr>
+              <th>User</th><th>Email</th><th>Role</th><th style="text-align:right">Action</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <!-- filled by JS -->
+          </tbody>
+        </table>
+      </div>
+      <button class="strip-btn primary" style="margin-top:16px;padding:10px 20px" onclick="addUser()">+ Add User</button>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /app-screen -->
+
+<!-- ═══════════════════════════
+     DRIVER SCREEN
+═══════════════════════════ -->
+<div id="driver-screen" class="screen">
+  <div class="driver-topbar">
+    <div class="brand-hex" style="width:30px;height:30px;font-size:13px;flex-shrink:0">📡</div>
+    <div class="driver-topbar-title">Cargo<span>Trace</span></div>
+    <span style="font-size:10px;color:var(--muted2);margin-left:2px">Driver</span>
+    <div style="flex:1"></div>
+    <div class="live-badge"><div class="live-dot"></div><span class="live-text">TX</span></div>
+    <span style="font-size:12px;font-weight:500;margin-left:8px">R. Dela Cruz</span>
+    <button class="logout-btn" style="margin-left:8px" onclick="doLogout()">Logout</button>
+  </div>
+
+  <div class="driver-body" id="driver-body">
+    <!-- Driver Map -->
+    <div class="driver-map tab-active" id="driver-map-panel">
+      <svg width="100%" height="100%" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice">
+        <rect width="900" height="600" fill="#060d14"/>
+        <defs>
+          <pattern id="dgrid" width="40" height="40" patternUnits="userSpaceOnUse">
+            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#0d1a26" stroke-width="0.6"/>
+          </pattern>
+        </defs>
+        <rect width="900" height="600" fill="url(#dgrid)"/>
+        <line x1="0" y1="300" x2="900" y2="300" stroke="#0f2030" stroke-width="5"/>
+        <line x1="450" y1="0" x2="450" y2="600" stroke="#0f2030" stroke-width="3"/>
+        <line x1="0" y1="150" x2="900" y2="180" stroke="#0c1a27" stroke-width="2"/>
+        <line x1="0" y1="450" x2="900" y2="420" stroke="#0c1a27" stroke-width="2"/>
+        <line x1="220" y1="0" x2="200" y2="600" stroke="#0c1a27" stroke-width="2"/>
+        <line x1="680" y1="0" x2="700" y2="600" stroke="#0c1a27" stroke-width="2"/>
+        <rect x="30" y="30" width="120" height="80" rx="3" fill="#0c1822" stroke="#102030"/>
+        <rect x="500" y="40" width="100" height="70" rx="3" fill="#0c1822" stroke="#102030"/>
+        <rect x="750" y="330" width="90" height="60" rx="3" fill="#0c1822" stroke="#102030"/>
+        <rect x="260" y="360" width="80" height="55" rx="3" fill="#0c1822" stroke="#102030"/>
+        <polyline points="50,500 120,440 200,380 290,330 380,295 450,300" fill="none" stroke="rgba(0,230,118,0.3)" stroke-width="3" stroke-dasharray="10,6"/>
+        <circle cx="450" cy="300" r="20" fill="rgba(0,230,118,0.08)" stroke="rgba(0,230,118,0.35)" stroke-width="2"/>
+        <circle cx="450" cy="300" r="8" fill="var(--green)"/>
+        <circle cx="450" cy="300" r="32" fill="none" stroke="rgba(0,230,118,0.12)" stroke-width="1.5" stroke-dasharray="5,4"/>
+        <polygon points="450,272 444,290 450,286 456,290" fill="var(--green)" opacity="0.85"/>
+      </svg>
+      <div style="position:absolute;top:14px;left:14px;font-family:'DM Mono',monospace;font-size:10px;color:var(--green);background:rgba(6,13,20,0.85);border:1px solid var(--border2);padding:5px 10px;border-radius:4px">
+        GPS LOCK · 4/4 SAT
+      </div>
+      <div style="position:absolute;bottom:14px;left:50%;transform:translateX(-50%);font-family:'DM Mono',monospace;font-size:10px;color:var(--muted2);background:rgba(6,13,20,0.85);border:1px solid var(--border2);padding:5px 14px;border-radius:4px;white-space:nowrap">
+        HEADING: NNE 032° &nbsp;|&nbsp; ALT: 14m
+      </div>
+    </div>
+
+    <!-- Driver Info Sidebar -->
+    <div class="driver-sidebar" id="driver-info-panel">
+      <!-- GPS -->
+      <div class="device-card">
+        <div class="device-card-title">📍 GPS Position</div>
+        <div class="gps-coord-box">
+          <div class="coord-label">Latitude / Longitude</div>
+          <div class="coord-val" id="driver-coords">14.5995°N, 120.9842°E<span class="blink">_</span></div>
+          <div class="coord-ts" id="driver-ts">Updated: just now</div>
+        </div>
+        <div class="stat-row"><div class="stat-row-label">Speed</div><div class="stat-row-val" style="color:var(--green)">62 km/h</div></div>
+        <div class="stat-row"><div class="stat-row-label">Heading</div><div class="stat-row-val">NNE · 032°</div></div>
+        <div class="stat-row"><div class="stat-row-label">Altitude</div><div class="stat-row-val">14 m</div></div>
+        <div class="stat-row"><div class="stat-row-label">Distance Today</div><div class="stat-row-val" style="color:var(--blue)">148 km</div></div>
+      </div>
+      <!-- Signal -->
+      <div class="device-card">
+        <div class="device-card-title">📡 Device</div>
+        <div class="signal-full" style="margin-bottom:10px">
+          <div class="sig-big"><div class="b on"></div><div class="b on"></div><div class="b on"></div><div class="b on"></div></div>
+          <div><div class="sig-text">4G · Excellent</div><div class="sig-sub">Signal</div></div>
+        </div>
+        <div class="device-info-row"><span>Device ID</span><span class="device-info-val">DEV-0412</span></div>
+        <div class="device-info-row"><span>Vehicle</span><span class="device-info-val">VH-001</span></div>
+        <div class="device-info-row"><span>GPS Sats</span><span class="device-info-val" style="color:var(--green)">4 / 4</span></div>
+        <div class="device-info-row"><span>Battery</span><span class="device-info-val" style="color:var(--green)">87%</span></div>
+        <div class="device-info-row"><span>Tx Rate</span><span class="device-info-val">Every 10s</span></div>
+        <div class="device-info-row"><span>Status</span><span class="device-info-val" style="color:var(--green)">● ONLINE</span></div>
+      </div>
+      <!-- Trip -->
+      <div class="device-card">
+        <div class="device-card-title">🚛 Trip</div>
+        <div class="stat-row"><div class="stat-row-label">Driver</div><div class="stat-row-val" style="font-size:11px">R. Dela Cruz</div></div>
+        <div class="stat-row"><div class="stat-row-label">Start Time</div><div class="stat-row-val">07:24 AM</div></div>
+        <div class="stat-row"><div class="stat-row-label">Engine Hours</div><div class="stat-row-val">4h 12m</div></div>
+        <div class="stat-row"><div class="stat-row-label">Overspeed</div><div class="stat-row-val" style="color:var(--green)">None</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile bottom nav for driver -->
+  <div class="driver-bottom-nav">
+    <div class="dbn-inner">
+      <div class="dbn-btn active" id="dbn-map" onclick="driverTab('map')">
+        <span>🗺️</span>Map
+      </div>
+      <div class="dbn-btn" id="dbn-info" onclick="driverTab('info')">
+        <span>📊</span>Stats
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SUCCESS TOAST -->
+<div class="success-toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ══ STATE ══
+let currentRole = 'admin';
+let mapInitialized = false;
+let window_appMap = null;
+let currentTileLayer = null;
+let useSatellite = false;
+let sidebarOpen = false;
+let bottomStripCollapsed = false;
+let dpSeconds = 0;
+
+const vehicles = [
+  {id:'VH-001',name:'Isuzu NHR · TRK-2291',driver:'R. Dela Cruz',device:'DEV-0412',lat:14.5995,lng:120.9842,status:'moving',speed:62,signal:4,dist:'148 km',heading:'NNE · 032°'},
+  {id:'VH-002',name:'Mitsubishi Canter · TRK-0871',driver:'C. Santos',device:'DEV-0381',lat:14.6122,lng:121.0124,status:'moving',speed:48,signal:3,dist:'92 km',heading:'ENE · 065°'},
+  {id:'VH-003',name:'Isuzu ELF · TRK-1134',driver:'B. Reyes',device:'DEV-0377',lat:14.5771,lng:121.0234,status:'idle',speed:0,signal:4,dist:'55 km',heading:'—'},
+  {id:'VH-004',name:'Isuzu ELF · TRK-0923',driver:'A. Garcia',device:'DEV-0398',lat:14.5840,lng:120.9671,status:'moving',speed:71,signal:4,dist:'201 km',heading:'SSW · 208°'},
+  {id:'VH-005',name:'Hino 500 · TRK-4412',driver:'P. Mendoza',device:'DEV-0355',lat:null,lng:null,status:'offline',speed:null,signal:0,dist:'—',heading:'—'},
+];
+
+const users = [
+  {name:'J. Miller',email:'admin@cargotrace.io',role:'admin'},
+  {name:'S. Carter',email:'dispatcher@cargotrace.io',role:'dispatcher'},
+  {name:'T. Brooks',email:'viewer@cargotrace.io',role:'viewer'},
+];
+
+// ══ ROLE SELECT ══
+function selectRole(el, role) {
+  document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  currentRole = role;
+  document.getElementById('role-display').textContent = role.toUpperCase();
+}
+
+// ══ LOGIN ══
+function doLogin() {
+  const uname = document.getElementById('uname').value.trim();
+  const upass = document.getElementById('upass').value.trim();
+  if (!uname || !upass) { showToast('Please enter username and password', true); return; }
+
+  document.getElementById('login-screen').classList.remove('active');
+
+  if (currentRole === 'driver') {
+    document.getElementById('driver-screen').classList.add('active');
+  } else {
+    document.getElementById('app-screen').classList.add('active');
+    setTimeout(initLeafletMap, 350);
+
+    const badge = document.getElementById('role-badge');
+    badge.className = 'role-tag ' + currentRole;
+    const labels = {admin:'ADMIN',dispatcher:'DISPATCHER',viewer:'VIEWER'};
+    badge.textContent = labels[currentRole] || currentRole.toUpperCase();
+
+    document.querySelectorAll('.admin-only, #admin-section').forEach(el => {
+      el.style.display = (currentRole === 'admin') ? '' : 'none';
+    });
+    document.getElementById('add-device-btn').style.display = (currentRole === 'viewer') ? 'none' : '';
+    document.getElementById('export-btn').style.display = (currentRole === 'viewer') ? 'none' : '';
+
+    renderVehicleTable();
+    renderUsers();
+  }
+}
+
+// ══ LOGOUT ══
+function doLogout() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('login-screen').classList.add('active');
+  closeDetail();
+  if (sidebarOpen) toggleSidebar();
+}
+
+// ══ SIDEBAR (mobile) ══
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  document.getElementById('app-sidebar').classList.toggle('open', sidebarOpen);
+  document.getElementById('sidebar-overlay').classList.toggle('open', sidebarOpen);
+}
+
+// ══ NAV ══
+function switchTab(tabId, el) {
+  document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+  if (el) el.classList.add('active');
+  // Find matching sidebar nav if called programmatically
+  else {
+    document.querySelectorAll('.nav-item').forEach(i => {
+      if (i.getAttribute('onclick') && i.getAttribute('onclick').includes(tabId)) i.classList.add('active');
+    });
+  }
+  document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  if (tabId === 'map-view' && window_appMap) setTimeout(() => window_appMap.invalidateSize(), 100);
+  if (sidebarOpen) toggleSidebar();
+}
+
+// ══ LEAFLET MAP ══
+function initLeafletMap() {
+  if (mapInitialized) return;
+  if (typeof L === 'undefined') { setTimeout(initLeafletMap, 200); return; }
+  mapInitialized = true;
+
+  const map = L.map('leaflet-map', {
+    center: [14.5943, 120.9918],
+    zoom: 13,
+    zoomControl: false,
+    attributionControl: false
+  });
+  window_appMap = map;
+
+  currentTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:20}).addTo(map);
+
+  vehicles.forEach(v => {
+    if (v.lat === null) return;
+    const colorHex = v.status === 'moving' ? '#00e676' : '#ffb74d';
+
+    const iconHtml = `
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;animation:vfloat 4s ease-in-out infinite;animation-delay:-${Math.random()*3}s" onclick="openDetail('${v.id}')">
+        <div style="width:14px;height:14px;border-radius:50%;background:${colorHex};border:2.5px solid #fff;position:relative;z-index:2;"></div>
+        <div style="position:absolute;width:14px;height:14px;border-radius:50%;border:2px solid ${colorHex};animation:vring 2.5s ease-out infinite;top:0;left:0;"></div>
+        <div style="width:2px;height:8px;background:${colorHex};"></div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;font-weight:700;background:rgba(6,13,20,0.9);border:1px solid ${colorHex}77;color:${colorHex};padding:2px 5px;border-radius:3px;white-space:nowrap;">${v.id}·${v.status==='moving'?v.speed+'km/h':'IDLE'}</div>
+      </div>`;
+
+    const icon = L.divIcon({className:'custom-leaflet-icon',html:iconHtml,iconSize:[40,40],iconAnchor:[20,0]});
+    L.marker([v.lat, v.lng], {icon}).addTo(map);
+  });
+}
+
+function mapZoom(dir) { if (window_appMap) window_appMap.setZoom(window_appMap.getZoom() + dir); }
+function mapCenter() {
+  if (!window_appMap) return;
+  const valid = vehicles.filter(v => v.lat !== null);
+  const bounds = L.latLngBounds(valid.map(v => [v.lat, v.lng]));
+  window_appMap.fitBounds(bounds, {padding:[40,40]});
+}
+function toggleLayer() {
+  if (!window_appMap) return;
+  useSatellite = !useSatellite;
+  if (currentTileLayer) currentTileLayer.remove();
+  currentTileLayer = L.tileLayer(
+    useSatellite
+      ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+      : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    {maxZoom:20}
+  ).addTo(window_appMap);
+}
+
+// ══ DETAIL PANEL ══
+function openDetail(id) {
+  const v = vehicles.find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('dp-vehicle-id').textContent = id;
+  document.getElementById('dp-coords').textContent = v.lat ? `${v.lat.toFixed(4)}°N, ${v.lng.toFixed(4)}°E` : '— No Signal';
+  document.getElementById('dp-speed').textContent = v.speed !== null ? `${v.speed} km/h` : '—';
+  document.getElementById('dp-heading').textContent = v.heading;
+  document.getElementById('dp-driver').textContent = v.driver;
+  document.getElementById('dp-device').textContent = v.device;
+  document.getElementById('dp-dist').textContent = v.dist;
+
+  const pill = document.getElementById('dp-status-pill');
+  pill.className = `status-pill ${v.status}`;
+  pill.innerHTML = `<span class="dot"></span>${v.status.toUpperCase()}`;
+
+  const sigHtml = Array(4).fill(0).map((_,i) => `<div class="sig ${i < v.signal ? 'on' : ''}"></div>`).join('');
+  document.getElementById('dp-signal').innerHTML = `<div class="signal-bar">${sigHtml}</div>`;
+
+  dpSeconds = 0;
+  document.getElementById('dp-ts').textContent = '0s ago';
+  document.getElementById('detail-panel').classList.add('open');
+  document.getElementById('dp-overlay').classList.add('open');
+}
+
+function closeDetail() {
+  document.getElementById('detail-panel').classList.remove('open');
+  document.getElementById('dp-overlay').classList.remove('open');
+}
+
+// ══ VEHICLE TABLE ══
+function renderVehicleTable() {
+  const tbody = document.getElementById('vehicle-tbody');
+  tbody.innerHTML = vehicles.map(v => {
+    const coordStr = v.lat ? `${v.lat.toFixed(4)}°N<br>${v.lng.toFixed(4)}°E` : `—<br>—`;
+    const speedStr = v.speed !== null ? `<span class="speed-val" style="color:${v.status==='moving'?'var(--green)':'var(--muted2)'}">${v.speed}<span style="font-size:10px;color:var(--muted2)"> km/h</span></span>` : `<span style="color:var(--muted)">—</span>`;
+    const sigHtml = `<div class="signal-bar">${Array(4).fill(0).map((_,i)=>`<div class="sig ${i<v.signal?'on':''}"></div>`).join('')}</div>`;
+    const timeAgo = v.status === 'offline' ? `<span style="color:var(--red)">47m ago</span>` : `<span class="last-up">${Math.floor(Math.random()*30)+1}s ago</span>`;
+    return `<tr onclick="openDetail('${v.id}')">
+      <td><div class="vid">${v.id}</div><div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace">${v.device}</div></td>
+      <td><div class="vname">${v.name}</div><div class="vdriver">${v.driver}</div></td>
+      <td><div class="coords" style="${v.status==='offline'?'color:var(--muted)':''}">${coordStr}</div></td>
+      <td>${speedStr}</td>
+      <td><span class="status-pill ${v.status}"><span class="dot"></span>${v.status.charAt(0).toUpperCase()+v.status.slice(1)}</span></td>
+      <td>${sigHtml}</td>
+      <td>${timeAgo}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ══ USERS TABLE ══
+function renderUsers() {
+  const tbody = document.getElementById('users-tbody');
+  tbody.innerHTML = users.map(u => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:12px 14px;font-weight:500">${u.name}</td>
+      <td style="padding:12px 14px;color:var(--muted2);font-size:12px">${u.email}</td>
+      <td style="padding:12px 14px"><span class="role-tag ${u.role}">${u.role.toUpperCase()}</span></td>
+      <td style="padding:12px 14px;text-align:right"><button class="strip-btn" onclick="editUser('${u.name}')">Edit</button></td>
+    </tr>`).join('');
+}
+
+function editUser(name) { showToast(`Editing ${name}...`); }
+
+function addUser() {
+  const name = prompt('Full Name:');
+  if (!name) return;
+  const email = prompt('Email:');
+  if (!email) return;
+  users.push({name, email, role:'viewer'});
+  renderUsers();
+  showToast(`User ${name} added`);
+}
+
+// ══ SAVE VEHICLE ══
+function saveVehicle() {
+  const name = document.getElementById('av-name').value.trim();
+  const plate = document.getElementById('av-plate').value.trim();
+  const driver = document.getElementById('av-driver').value.trim();
+  const device = document.getElementById('av-device').value.trim();
+  if (!name || !plate || !driver || !device) { showToast('Please fill all fields', true); return; }
+
+  const id = `VH-00${vehicles.length+1}`;
+  vehicles.push({
+    id, name:`${name} · ${plate}`, driver, device,
+    lat: 14.5900 + (Math.random()-0.5)*0.06,
+    lng: 121.0000 + (Math.random()-0.5)*0.06,
+    status:'idle', speed:0, signal:3, dist:'0 km', heading:'—'
+  });
+  renderVehicleTable();
+  document.getElementById('stat-total').textContent = vehicles.length;
+  document.getElementById('av-name').value='';
+  document.getElementById('av-plate').value='';
+  document.getElementById('av-driver').value='';
+  document.getElementById('av-device').value='';
+  showToast(`✓ Vehicle ${id} added successfully!`);
+  switchTab('map-view', null);
+}
+
+// ══ EXPORT CSV ══
+function exportCSV() {
+  const headers = ['ID','Name','Driver','Device','Lat','Lng','Status','Speed'];
+  const rows = vehicles.map(v => [v.id,v.name,v.driver,v.device,v.lat??'',v.lng??'',v.status,v.speed??''].join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'fleet_export.csv';
+  a.click();
+  showToast('✓ CSV exported');
+}
+
+// ══ BOTTOM STRIP ══
+function toggleBottomStrip() {
+  bottomStripCollapsed = !bottomStripCollapsed;
+  document.getElementById('bottom-strip').classList.toggle('collapsed', bottomStripCollapsed);
+  document.getElementById('strip-toggle').classList.toggle('flipped', bottomStripCollapsed);
+}
+
+// ══ TOAST ══
+function showToast(msg, isError=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = isError ? 'var(--red)' : 'var(--green)';
+  t.style.color = isError ? '#fff' : '#000';
+  t.style.display = 'block';
+  clearTimeout(t._to);
+  t._to = setTimeout(() => { t.style.display='none'; }, 2800);
+}
+
+// ══ DRIVER SCREEN MOBILE TABS ══
+function driverTab(tab) {
+  const mapPanel = document.getElementById('driver-map-panel');
+  const infoPanel = document.getElementById('driver-info-panel');
+  document.querySelectorAll('.dbn-btn').forEach(b => b.classList.remove('active'));
+  if (tab === 'map') {
+    mapPanel.classList.add('tab-active');
+    infoPanel.classList.remove('tab-active');
+    document.getElementById('dbn-map').classList.add('active');
+  } else {
+    infoPanel.classList.add('tab-active');
+    mapPanel.classList.remove('tab-active');
+    document.getElementById('dbn-info').classList.add('active');
+  }
+}
+
+// ══ TIMERS ══
+setInterval(() => {
+  dpSeconds++;
+  const el = document.getElementById('dp-ts');
+  if (el) el.textContent = dpSeconds + 's ago';
+}, 1000);
+
+let baseLat = 14.5995, baseLon = 120.9842;
+setInterval(() => {
+  baseLat += (Math.random()-0.5)*0.0002;
+  baseLon += (Math.random()-0.5)*0.0002;
+  const el = document.getElementById('driver-coords');
+  if (el) el.innerHTML = baseLat.toFixed(4)+'°N, '+baseLon.toFixed(4)+'°E<span class="blink">_</span>';
+}, 8000);
+
+// ══ KEYBOARD ══
+document.addEventListener('keydown', e => {
+  if (e.key==='Enter' && document.getElementById('login-screen').classList.contains('active')) doLogin();
+  if (e.key==='Escape') { closeDetail(); if(sidebarOpen) toggleSidebar(); }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #07090d;
+  color: #dde6ef;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Thin dark scrollbars to match the prototype */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #1f3245;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@layer components {
+  /* Reusable UI primitives used across Admin / Driver / Customer views */
+  .ct-card {
+    @apply bg-s1 border border-border rounded-lg;
+  }
+  .ct-input {
+    @apply w-full bg-s2 border border-border2 rounded-md px-3 py-2.5 text-text
+           text-sm outline-none transition-colors placeholder:text-muted
+           focus:border-green;
+  }
+  .ct-label {
+    @apply block text-[10px] font-semibold tracking-[1.5px] uppercase text-muted2 mb-1.5;
+  }
+  .ct-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5
+           text-sm font-semibold transition-colors disabled:opacity-50;
+  }
+  .ct-btn-primary {
+    @apply ct-btn bg-green text-black hover:bg-[#00ff87];
+  }
+  .ct-btn-ghost {
+    @apply ct-btn border border-border2 text-muted2 hover:border-green hover:text-green;
+  }
+  .ct-pill {
+    @apply inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase
+           tracking-wide px-2 py-1 rounded;
+  }
+}
+
+/* MapLibre tweaks for the dark theme */
+.maplibregl-map {
+  background: #060d14;
+}
+.maplibregl-ctrl-attrib {
+  font-size: 9px;
+}
