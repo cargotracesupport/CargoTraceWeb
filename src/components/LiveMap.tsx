@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { mapStyleUrl } from "@/lib/maptiler";
+import { roadRoute } from "@/lib/route";
 
 export interface MapMarker {
   id: string;
@@ -84,11 +85,16 @@ function setRouteLine(
 export default function LiveMap({
   markers,
   route,
+  roadFrom,
+  roadTo,
   className,
   fit = true,
 }: {
   markers: MapMarker[];
   route?: Array<[number, number]>;
+  /** When set, the map draws the by-road driving route from A→B (falls back to a line). */
+  roadFrom?: [number, number];
+  roadTo?: [number, number];
   className?: string;
   fit?: boolean;
 }) {
@@ -157,14 +163,40 @@ export default function LiveMap({
     }
   }, [markers, fit]);
 
-  // sync route line (waits for the style to be ready before adding layers)
+  // Stable dependency key (a deps array must keep a constant size across renders).
+  const routeKey = JSON.stringify({ route, roadFrom, roadTo });
+
+  // Sync route line. When roadFrom/roadTo are given, fetch the actual by-road
+  // driving path; otherwise draw the explicit `route`. Waits for the style.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const apply = () => setRouteLine(map, route);
-    if (map.isStyleLoaded()) apply();
-    else map.once("load", apply);
-  }, [route]);
+    let cancelled = false;
+
+    async function resolve(): Promise<Array<[number, number]> | undefined> {
+      if (
+        roadFrom &&
+        roadTo &&
+        isValidLngLat(roadFrom[0], roadFrom[1]) &&
+        isValidLngLat(roadTo[0], roadTo[1])
+      ) {
+        return roadRoute(roadFrom, roadTo);
+      }
+      return route;
+    }
+
+    resolve().then((coords) => {
+      if (cancelled || !mapRef.current) return;
+      const apply = () => setRouteLine(map, coords);
+      if (map.isStyleLoaded()) apply();
+      else map.once("load", apply);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeKey]);
 
   return (
     <div

@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Delivery } from "@/lib/types";
-import Dashboard from "./_dashboard";
+import Dashboard, { type DeliveryRow } from "./_dashboard";
 
 export default async function AdminDashboardPage() {
   const supabase = createClient();
@@ -8,7 +8,7 @@ export default async function AdminDashboardPage() {
   // Active deliveries for the live map + list.
   const { data: active } = await supabase
     .from("deliveries")
-    .select("*")
+    .select("*, driver:profiles(full_name)")
     .in("status", ["assigned", "en_route"])
     .order("created_at", { ascending: false });
 
@@ -17,7 +17,7 @@ export default async function AdminDashboardPage() {
     .from("deliveries")
     .select("status,delivered_at");
 
-  const activeDeliveries = (active ?? []) as Delivery[];
+  const activeDeliveries = (active ?? []) as DeliveryRow[];
   const rows = (all ?? []) as Pick<Delivery, "status" | "delivered_at">[];
 
   const startOfToday = new Date();

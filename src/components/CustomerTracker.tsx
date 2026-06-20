@@ -106,15 +106,13 @@ export default function CustomerTracker({
     });
   }
 
-  const route: Array<[number, number]> | undefined =
-    delivery.origin_lat != null &&
-    delivery.origin_lng != null &&
-    delivery.dest_lat != null &&
-    delivery.dest_lng != null
-      ? [
-          [delivery.origin_lng, delivery.origin_lat],
-          [delivery.dest_lng, delivery.dest_lat],
-        ]
+  const roadFrom: [number, number] | undefined =
+    delivery.origin_lat != null && delivery.origin_lng != null
+      ? [delivery.origin_lng, delivery.origin_lat]
+      : undefined;
+  const roadTo: [number, number] | undefined =
+    delivery.dest_lat != null && delivery.dest_lng != null
+      ? [delivery.dest_lng, delivery.dest_lat]
       : undefined;
 
   const etaMin =
@@ -222,7 +220,8 @@ export default function CustomerTracker({
             {markers.length > 0 ? (
               <LiveMap
                 markers={markers}
-                route={route}
+                roadFrom={roadFrom}
+                roadTo={roadTo}
                 fit
                 className="h-full w-full"
               />
