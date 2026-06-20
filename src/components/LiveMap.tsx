@@ -103,6 +103,8 @@ export default function LiveMap({
   route,
   roadFrom,
   roadTo,
+  focus,
+  focusKey,
   className,
   fit = true,
 }: {
@@ -111,6 +113,10 @@ export default function LiveMap({
   /** When set, the map draws the by-road driving route from A→B (falls back to a line). */
   roadFrom?: [number, number];
   roadTo?: [number, number];
+  /** Fly the camera to this point (e.g. a selected driver) instead of fitting all markers. */
+  focus?: { lng: number; lat: number; zoom?: number };
+  /** Re-fly only when this key changes (e.g. the selected delivery id), not on every position tick. */
+  focusKey?: string;
   className?: string;
   fit?: boolean;
 }) {
@@ -171,12 +177,32 @@ export default function LiveMap({
       }
     }
 
-    if (fit && valid.length > 0) {
+    // When a specific point is focused (a selected driver), the focus effect
+    // drives the camera — don't also fit to the whole route.
+    if (fit && !focus && valid.length > 0) {
       const bounds = new maplibregl.LngLatBounds();
       valid.forEach((m) => bounds.extend([m.lng, m.lat]));
       map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markers, fit]);
+
+  // Fly to a focused point (e.g. the selected driver) at a close zoom, only when
+  // focusKey changes — so picking a delivery navigates accurately to its driver.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !focus) return;
+    // flyTo only moves the camera (no style/tiles needed), so call it directly.
+    // Gating on isStyleLoaded()/once("load") can silently miss because the map's
+    // "load" event has already fired by the time a delivery is selected.
+    map.flyTo({
+      center: [focus.lng, focus.lat],
+      zoom: focus.zoom ?? 13,
+      duration: 1100,
+      essential: true,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey]);
 
   // Stable dependency key (a deps array must keep a constant size across renders).
   const routeKey = JSON.stringify({ route, roadFrom, roadTo });

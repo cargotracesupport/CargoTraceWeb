@@ -136,6 +136,17 @@ export default function Dashboard({
       ? [selected.dest_lng, selected.dest_lat]
       : undefined;
 
+  // Fly to the selected driver (or its origin/dest) at a close zoom.
+  const focus = !selected
+    ? undefined
+    : selected.last_lat != null && selected.last_lng != null
+      ? { lng: selected.last_lng, lat: selected.last_lat, zoom: 13 }
+      : selected.origin_lat != null && selected.origin_lng != null
+        ? { lng: selected.origin_lng, lat: selected.origin_lat, zoom: 12 }
+        : selected.dest_lat != null && selected.dest_lng != null
+          ? { lng: selected.dest_lng, lat: selected.dest_lat, zoom: 12 }
+          : undefined;
+
   const tiles = [
     { label: "En route", value: counts.enRoute, accent: "text-green", Icon: Truck },
     { label: "Assigned", value: counts.assigned, accent: "text-blue", Icon: Package },
@@ -169,7 +180,14 @@ export default function Dashboard({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
         <div className="ct-card relative overflow-hidden">
           <div className="h-[60vh] w-full lg:h-[calc(100vh-16rem)]">
-            <LiveMap markers={markers} roadFrom={roadFrom} roadTo={roadTo} fit />
+            <LiveMap
+              markers={markers}
+              roadFrom={roadFrom}
+              roadTo={roadTo}
+              focus={focus}
+              focusKey={selectedId ?? undefined}
+              fit
+            />
           </div>
           {/* Status legend overlay */}
           <div className="pointer-events-none absolute bottom-3 left-3 z-[1] rounded-md border border-border2 bg-s1/90 px-3 py-2 backdrop-blur">
