@@ -27,19 +27,36 @@ export default function LoginPage() {
 
     const supabase = createClient();
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       if (error) {
         setError(error.message);
+        setLoading(false);
         return;
       }
-      // Full navigation so the auth cookie is sent; root redirects by role.
-      window.location.href = "/";
+
+      // Resolve the role from the in-memory session (RLS lets a user read their
+      // own profile via the bearer token — no cookie round-trip needed) so we
+      // can navigate straight to the role's home and skip the "/" redirect hop.
+      let dest = "/";
+      const userId = data.user?.id;
+      if (userId) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", userId)
+          .single();
+        if (profile?.role) dest = profile.role === "admin" ? "/admin" : "/driver";
+      }
+
+      // Full navigation so the auth cookie is sent. Keep `loading` true through
+      // the navigation so the spinner stays visible until the destination
+      // paints — otherwise the button flips back to "Sign in" and looks frozen.
+      window.location.href = dest;
     } catch {
       setError("Something went wrong. Please try again.");
-    } finally {
       setLoading(false);
     }
   }
