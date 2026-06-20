@@ -2,34 +2,35 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Dashboard, Package, Truck } from "@/components/icons";
 
 const LINKS = [
-  { href: "/admin", label: "Dashboard", exact: true },
-  { href: "/admin/deliveries", label: "Deliveries", exact: false },
-  { href: "/admin/fleet", label: "Fleet", exact: false },
+  { href: "/admin", label: "Dashboard", exact: true, Icon: Dashboard },
+  { href: "/admin/deliveries", label: "Deliveries", exact: false, Icon: Package },
+  { href: "/admin/fleet", label: "Fleet", exact: false, Icon: Truck },
 ];
 
 export default function AdminNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex gap-1 p-2 md:flex-col md:gap-0.5 md:p-3">
-      {LINKS.map((link) => {
-        const active = link.exact
-          ? pathname === link.href
-          : pathname === link.href || pathname.startsWith(link.href + "/");
+    <nav className="flex gap-1 p-2 md:flex-col md:gap-1 md:p-3">
+      {LINKS.map(({ href, label, exact, Icon }) => {
+        const active = exact
+          ? pathname === href
+          : pathname === href || pathname.startsWith(href + "/");
 
         return (
           <Link
-            key={link.href}
-            href={link.href}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition-colors md:flex-none ${
-              active
-                ? "bg-green/10 text-green"
-                : "text-muted2 hover:bg-s2 hover:text-text"
+            key={href}
+            href={href}
+            aria-current={active ? "page" : undefined}
+            className={`ct-nav flex-1 justify-center md:flex-none md:justify-start ${
+              active ? "ct-nav-active" : ""
             }`}
           >
-            {link.label}
+            <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={active ? 2.4 : 2} />
+            <span>{label}</span>
           </Link>
         );
       })}

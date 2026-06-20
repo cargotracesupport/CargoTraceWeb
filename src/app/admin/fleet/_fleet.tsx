@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile, Vehicle, Device } from "@/lib/types";
 import Spinner from "@/components/Spinner";
 import DeleteButton from "@/components/DeleteButton";
+import { Plus, Trash, Users, Truck, Package } from "@/components/icons";
 
 export default function Fleet({
   orgId,
@@ -78,6 +79,7 @@ function DriversCard({ drivers }: { drivers: Profile[] }) {
     <section className="ct-card flex flex-col">
       <CardHeader
         title="Drivers"
+        Icon={Users}
         count={drivers.length}
         open={open}
         onToggle={() => {
@@ -231,6 +233,7 @@ function VehiclesCard({
     <section className="ct-card flex flex-col">
       <CardHeader
         title="Vehicles"
+        Icon={Truck}
         count={vehicles.length}
         open={open}
         onToggle={() => {
@@ -366,6 +369,7 @@ function DevicesCard({
     <section className="ct-card flex flex-col">
       <CardHeader
         title="Devices"
+        Icon={Package}
         count={devices.length}
         open={open}
         onToggle={() => {
@@ -509,7 +513,14 @@ function DeleteDriverButton({ id }: { id: string }) {
       title="Delete driver"
       className="ct-btn-ghost px-2 py-1 text-xs hover:border-red hover:text-red disabled:opacity-50"
     >
-      {busy ? <Spinner /> : "Delete"}
+      {busy ? (
+        <Spinner />
+      ) : (
+        <>
+          <Trash className="h-3.5 w-3.5" />
+          Delete
+        </>
+      )}
     </button>
   );
 }
@@ -519,15 +530,18 @@ function CardHeader({
   count,
   open,
   onToggle,
+  Icon,
 }: {
   title: string;
   count: number;
   open: boolean;
   onToggle: () => void;
+  Icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
     <div className="flex items-center justify-between border-b border-border px-4 py-3">
       <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-muted2" />
         <h2 className="text-sm font-semibold">{title}</h2>
         <span className="ct-pill bg-s3 text-muted2">{count}</span>
       </div>
@@ -536,7 +550,13 @@ function CardHeader({
         onClick={onToggle}
         className="ct-btn-ghost px-3 py-1.5 text-xs"
       >
-        {open ? "Close" : "+ Add"}
+        {open ? (
+          "Close"
+        ) : (
+          <>
+            <Plus className="h-3.5 w-3.5" /> Add
+          </>
+        )}
       </button>
     </div>
   );

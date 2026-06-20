@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
+import { BrandMark, Wordmark, Check, MapPin, Flag } from "@/components/icons";
 import { estimateEtaMinutes, formatEta } from "@/lib/eta";
 import type { DeliveryStatus } from "@/lib/types";
 
@@ -130,8 +131,9 @@ export default function CustomerTracker({
     <main className="min-h-dvh bg-bg text-text flex flex-col">
       {/* Header */}
       <header className="px-4 py-4 border-b border-border flex items-center justify-between">
-        <div className="text-xl font-semibold tracking-tight">
-          Cargo<span className="text-green">Trace</span>
+        <div className="flex items-center gap-2">
+          <BrandMark className="h-7 w-7" />
+          <Wordmark className="text-lg" />
         </div>
         <DeliveryStatusBadge status={status} />
       </header>
@@ -152,14 +154,14 @@ export default function CustomerTracker({
 
           <div className="mt-4 grid grid-cols-1 gap-2 text-sm">
             <div className="flex items-start gap-2">
-              <span className="mt-1 w-2 h-2 rounded-full bg-blue shrink-0" />
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue" />
               <div>
                 <div className="text-muted2 text-xs">From</div>
                 <div>{delivery.origin_label}</div>
               </div>
             </div>
             <div className="flex items-start gap-2">
-              <span className="mt-1 w-2 h-2 rounded-full bg-green shrink-0" />
+              <Flag className="mt-0.5 h-4 w-4 shrink-0 text-green" />
               <div>
                 <div className="text-muted2 text-xs">To</div>
                 <div>{delivery.dest_label}</div>
@@ -171,7 +173,9 @@ export default function CustomerTracker({
         {/* Status / ETA banner */}
         {isDelivered ? (
           <section className="ct-card p-5 text-center border-green/40 bg-green/5">
-            <div className="text-2xl font-semibold text-green">Delivered ✓</div>
+            <div className="flex items-center justify-center gap-2 text-2xl font-semibold text-green">
+              <Check className="h-6 w-6" /> Delivered
+            </div>
             <p className="text-muted2 mt-1">
               Your delivery has arrived
               {delivery.delivered_at ? (

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Spinner from "@/components/Spinner";
+import { BrandMark } from "@/components/icons";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -58,9 +59,7 @@ export default function LoginPage() {
       <div className="relative w-full max-w-sm">
         {/* Branding */}
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-border2 bg-s2 text-2xl shadow-lg shadow-black/40">
-            <span aria-hidden>📡</span>
-          </div>
+          <BrandMark className="mb-3 h-12 w-12" />
           <h1 className="text-2xl font-bold tracking-tight">
             Cargo<span className="text-green">Trace</span>
           </h1>

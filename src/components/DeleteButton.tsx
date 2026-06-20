@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import Spinner from "@/components/Spinner";
+import { Trash } from "@/components/icons";
 
 type Table = "deliveries" | "vehicles" | "devices";
 
@@ -46,7 +47,14 @@ export default function DeleteButton({
       title="Delete"
       className="ct-btn-ghost px-2 py-1 text-xs hover:border-red hover:text-red disabled:opacity-50"
     >
-      {busy ? <Spinner /> : label}
+      {busy ? (
+        <Spinner />
+      ) : (
+        <>
+          <Trash className="h-3.5 w-3.5" />
+          {label}
+        </>
+      )}
     </button>
   );
 }

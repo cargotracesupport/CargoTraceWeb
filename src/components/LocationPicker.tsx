@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { mapStyleUrl } from "@/lib/maptiler";
+import { MapPin, Flag, Search } from "@/components/icons";
 
 export type LatLng = { lat: number; lng: number };
 type Which = "origin" | "dest";
@@ -166,14 +167,14 @@ export default function LocationPicker({
           onClick={() => setActive("origin")}
           className={`ct-btn px-3 py-2 text-xs ${active === "origin" ? "bg-blue/15 text-blue border border-blue/50" : "ct-btn-ghost"}`}
         >
-          📍 Set pickup (A)
+          <MapPin className="h-3.5 w-3.5" /> Set pickup (A)
         </button>
         <button
           type="button"
           onClick={() => setActive("dest")}
           className={`ct-btn px-3 py-2 text-xs ${active === "dest" ? "bg-amber/15 text-amber border border-amber/50" : "ct-btn-ghost"}`}
         >
-          🏁 Set drop-off (B)
+          <Flag className="h-3.5 w-3.5" /> Set drop-off (B)
         </button>
       </div>
 
@@ -198,7 +199,13 @@ export default function LocationPicker({
             disabled={searching}
             className="ct-btn-ghost shrink-0"
           >
-            {searching ? "…" : "Search"}
+            {searching ? (
+              "…"
+            ) : (
+              <>
+                <Search className="h-4 w-4" /> Search
+              </>
+            )}
           </button>
         </div>
         {results.length > 0 && (

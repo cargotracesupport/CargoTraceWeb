@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { Play } from "@/components/icons";
 
 type LngLat = { lat: number; lng: number };
 
@@ -111,7 +112,7 @@ export default function SimulateButton({
           className="ct-btn-ghost px-2 py-1 text-xs"
           title="Drive this delivery A→B with simulated GPS (no hardware needed)"
         >
-          ▶ Simulate
+          <Play className="h-3 w-3" /> Simulate
         </button>
       )}
       {error && <span className="text-xs text-red">{error}</span>}

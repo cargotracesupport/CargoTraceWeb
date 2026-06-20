@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Locate } from "@/components/icons";
 
 type Status = "off" | "starting" | "sharing" | "denied" | "error";
 
@@ -103,11 +104,9 @@ export default function ShareLocationButton({
         aria-pressed={active}
       >
         <span className="flex items-center gap-2">
-          <span
+          <Locate
             className={
-              active
-                ? "h-2.5 w-2.5 animate-pulse rounded-full bg-green"
-                : "h-2.5 w-2.5 rounded-full bg-muted"
+              active ? "h-4 w-4 animate-pulse text-green" : "h-4 w-4 text-muted2"
             }
           />
           {active ? "Sharing live location" : "Share my live location"}

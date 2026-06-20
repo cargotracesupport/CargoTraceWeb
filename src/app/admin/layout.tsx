@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth";
 import AdminNav from "./_nav";
+import { BrandMark, Wordmark, LiveDot, LogOut } from "@/components/icons";
 
 export default async function AdminLayout({
   children,
@@ -13,12 +14,11 @@ export default async function AdminLayout({
       {/* Fixed topbar */}
       <header className="fixed inset-x-0 top-0 z-30 h-14 border-b border-border bg-s1/95 backdrop-blur">
         <div className="flex h-full items-center justify-between gap-3 px-4">
-          <div className="flex items-center gap-3">
-            <span className="text-base font-semibold tracking-tight">
-              Cargo<span className="text-green">Trace</span>
-            </span>
-            <span className="ct-pill bg-green/10 text-green">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
+          <div className="flex items-center gap-2.5">
+            <BrandMark className="h-8 w-8" />
+            <Wordmark className="text-base" />
+            <span className="ct-pill ml-1 hidden bg-green/10 text-green sm:inline-flex">
+              <LiveDot />
               LIVE
             </span>
           </div>
@@ -29,6 +29,7 @@ export default async function AdminLayout({
             </span>
             <form action="/api/auth/signout" method="post">
               <button type="submit" className="ct-btn-ghost px-3 py-1.5 text-xs">
+                <LogOut className="h-3.5 w-3.5" />
                 Logout
               </button>
             </form>

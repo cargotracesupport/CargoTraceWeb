@@ -12,57 +12,124 @@ body {
 }
 
 body {
-  background: #07090d;
+  background:
+    radial-gradient(1100px 520px at 50% -8%, rgba(0, 230, 118, 0.06), transparent 60%),
+    #07090d;
+  background-attachment: fixed;
   color: #dde6ef;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Thin dark scrollbars to match the prototype */
+::selection {
+  background: rgba(0, 230, 118, 0.25);
+}
+
+/* Thin, refined scrollbars */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-thumb {
   background: #1f3245;
-  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2a4358;
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 
+/* Visible keyboard focus everywhere */
+:focus-visible {
+  outline: 2px solid rgba(0, 230, 118, 0.7);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 @layer components {
-  /* Reusable UI primitives used across Admin / Driver / Customer views */
+  /* Surfaces */
   .ct-card {
-    @apply bg-s1 border border-border rounded-lg;
+    @apply rounded-xl border border-border/90 bg-s1/85 backdrop-blur-sm;
+    box-shadow:
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.03),
+      0 10px 30px -16px rgba(0, 0, 0, 0.7);
   }
+  .ct-stat {
+    @apply ct-card flex flex-col gap-1 p-4 transition-colors duration-200 hover:border-border2;
+  }
+
+  /* Inputs */
   .ct-input {
-    @apply w-full bg-s2 border border-border2 rounded-md px-3 py-2.5 text-text
-           text-sm outline-none transition-colors placeholder:text-muted
-           focus:border-green;
+    @apply w-full rounded-lg border border-border2 bg-s2/80 px-3.5 py-2.5 text-sm text-text outline-none
+           transition-[border-color,box-shadow] duration-200 placeholder:text-muted
+           focus:border-green focus:shadow-[0_0_0_3px_rgba(0,230,118,0.16)];
   }
   .ct-label {
-    @apply block text-[10px] font-semibold tracking-[1.5px] uppercase text-muted2 mb-1.5;
+    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[1.2px] text-muted2;
   }
+
+  /* Buttons */
   .ct-btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5
-           text-sm font-semibold transition-colors disabled:opacity-50;
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold
+           transition-[transform,background-color,border-color,color,box-shadow] duration-150
+           active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green/60
+           disabled:pointer-events-none disabled:opacity-50;
   }
   .ct-btn-primary {
-    @apply ct-btn bg-green text-black hover:bg-[#00ff87];
+    @apply ct-btn bg-green text-black shadow-[0_8px_22px_-10px_rgba(0,230,118,0.7)] hover:bg-[#1aff90];
   }
   .ct-btn-ghost {
-    @apply ct-btn border border-border2 text-muted2 hover:border-green hover:text-green;
+    @apply ct-btn border border-border2 bg-s2/40 text-muted2 hover:border-green/50 hover:bg-s2 hover:text-text;
   }
+
+  /* Status pills */
   .ct-pill {
-    @apply inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase
-           tracking-wide px-2 py-1 rounded;
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide;
+  }
+
+  /* Sidebar / nav item */
+  .ct-nav {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted2
+           transition-colors duration-150 hover:bg-s2 hover:text-text;
+  }
+  .ct-nav-active {
+    @apply bg-green/10 text-green;
   }
 }
 
-/* MapLibre tweaks for the dark theme */
+/* Respect users who prefer less motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* MapLibre — match the dark theme */
 .maplibregl-map {
   background: #060d14;
 }
 .maplibregl-ctrl-attrib {
   font-size: 9px;
+}
+.maplibregl-ctrl-group {
+  background: rgba(13, 17, 23, 0.92) !important;
+  border: 1px solid #1f3245 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid #1f3245 !important;
+}
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1) hue-rotate(180deg) brightness(1.1);
 }

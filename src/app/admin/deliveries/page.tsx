@@ -4,6 +4,7 @@ import type { Delivery } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import SimulateButton from "@/components/SimulateButton";
 import DeleteButton from "@/components/DeleteButton";
+import { Plus } from "@/components/icons";
 
 type DeliveryRow = Delivery & {
   driver: { full_name: string | null } | null;
@@ -38,7 +39,7 @@ export default async function AdminDeliveriesPage() {
           </p>
         </div>
         <Link href="/admin/deliveries/new" className="ct-btn-primary">
-          + New delivery
+          <Plus className="h-4 w-4" /> New delivery
         </Link>
       </div>
 

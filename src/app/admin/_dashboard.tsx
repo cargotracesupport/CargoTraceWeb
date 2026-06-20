@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Delivery } from "@/lib/types";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
+import { Truck, Package, Check, Dashboard as DashIcon } from "@/components/icons";
 
 interface Counts {
   enRoute: number;
@@ -88,10 +89,15 @@ export default function Dashboard({
   );
 
   const tiles = [
-    { label: "En route", value: counts.enRoute, accent: "text-green" },
-    { label: "Assigned", value: counts.assigned, accent: "text-blue" },
-    { label: "Delivered today", value: counts.deliveredToday, accent: "text-green" },
-    { label: "Total", value: counts.total, accent: "text-text" },
+    { label: "En route", value: counts.enRoute, accent: "text-green", Icon: Truck },
+    { label: "Assigned", value: counts.assigned, accent: "text-blue", Icon: Package },
+    {
+      label: "Delivered today",
+      value: counts.deliveredToday,
+      accent: "text-green",
+      Icon: Check,
+    },
+    { label: "Total", value: counts.total, accent: "text-text", Icon: DashIcon },
   ];
 
   return (
@@ -99,9 +105,12 @@ export default function Dashboard({
       {/* Stat tiles */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {tiles.map((t) => (
-          <div key={t.label} className="ct-card p-4">
-            <p className="ct-label mb-0">{t.label}</p>
-            <p className={`mt-2 font-mono text-3xl font-semibold ${t.accent}`}>
+          <div key={t.label} className="ct-stat">
+            <div className="flex items-center justify-between">
+              <p className="ct-label mb-0">{t.label}</p>
+              <t.Icon className={`h-4 w-4 ${t.accent} opacity-80`} />
+            </div>
+            <p className={`font-mono text-3xl font-semibold tabular-nums ${t.accent}`}>
               {t.value}
             </p>
           </div>
