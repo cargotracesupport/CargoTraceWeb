@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, Vehicle, Device } from "@/lib/types";
+import LocationPicker, { type LatLng } from "@/components/LocationPicker";
 
 interface Created {
   token: string;
@@ -25,6 +26,16 @@ function toNum(v: string): number | null {
   const t = v.trim();
   if (t === "") return null;
   return Number(t);
+}
+
+/** Parse a valid, in-range lat/lng pair from two fields, or null. Drives the map pins. */
+function parsePoint(latStr: string, lngStr: string): LatLng | null {
+  if (latStr.trim() === "" || lngStr.trim() === "") return null;
+  const lat = Number(latStr);
+  const lng = Number(lngStr);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  return { lat, lng };
 }
 
 export default function NewDeliveryForm({
@@ -71,6 +82,24 @@ export default function NewDeliveryForm({
       setLng(parts[1].trim());
     } else {
       setLat(value);
+    }
+  }
+
+  /** Map picker chose a point for pickup/drop-off — fill the coordinate (and label) fields. */
+  function handlePick(
+    which: "origin" | "dest",
+    p: { lat: number; lng: number; label?: string },
+  ) {
+    const lat = p.lat.toFixed(6);
+    const lng = p.lng.toFixed(6);
+    if (which === "origin") {
+      setOriginLat(lat);
+      setOriginLng(lng);
+      if (p.label) setOriginLabel(p.label);
+    } else {
+      setDestLat(lat);
+      setDestLng(lng);
+      if (p.label) setDestLabel(p.label);
     }
   }
 
@@ -228,6 +257,18 @@ export default function NewDeliveryForm({
             />
           </div>
         </div>
+      </fieldset>
+
+      {/* Pick on map */}
+      <fieldset className="ct-card flex flex-col gap-4 p-5">
+        <legend className="px-1 text-sm font-semibold">
+          Pick locations on the map
+        </legend>
+        <LocationPicker
+          origin={parsePoint(originLat, originLng)}
+          dest={parsePoint(destLat, destLng)}
+          onPick={handlePick}
+        />
       </fieldset>
 
       {/* Origin */}
