@@ -83,16 +83,22 @@ export default function NewDeliveryForm({
     const dLat = toNum(destLat);
     const dLng = toNum(destLng);
 
-    // Validate any provided coordinate is a finite number.
-    const coords: Array<[string, number | null]> = [
-      ["Origin latitude", oLat],
-      ["Origin longitude", oLng],
-      ["Destination latitude", dLat],
-      ["Destination longitude", dLng],
+    // Validate any provided coordinate is a finite number IN RANGE
+    // (latitude -90..90, longitude -180..180). Out-of-range values would crash the map.
+    const checks: Array<[string, number | null, number]> = [
+      ["Origin latitude", oLat, 90],
+      ["Origin longitude", oLng, 180],
+      ["Destination latitude", dLat, 90],
+      ["Destination longitude", dLng, 180],
     ];
-    for (const [label, n] of coords) {
-      if (n != null && !Number.isFinite(n)) {
-        setError(`${label} must be a valid number (e.g. 14.5995).`);
+    for (const [label, n, max] of checks) {
+      if (n == null) continue;
+      if (!Number.isFinite(n)) {
+        setError(`${label} must be a valid number (e.g. ${max === 90 ? "14.5995" : "120.9842"}).`);
+        return;
+      }
+      if (n < -max || n > max) {
+        setError(`${label} must be between -${max} and ${max}.`);
         return;
       }
     }

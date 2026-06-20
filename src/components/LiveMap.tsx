@@ -19,6 +19,19 @@ const COLORS: Record<NonNullable<MapMarker["kind"]>, string> = {
   dest: "#ffb74d",
 };
 
+// Guard against bad data: MapLibre throws on out-of-range coordinates, which
+// would crash the whole page. Anything invalid is simply skipped.
+function isValidLngLat(lng: number, lat: number): boolean {
+  return (
+    Number.isFinite(lng) &&
+    Number.isFinite(lat) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
+}
+
 const ROUTE_SOURCE = "route";
 const ROUTE_LAYER = "route-line";
 
@@ -30,7 +43,9 @@ function setRouteLine(
     | maplibregl.GeoJSONSource
     | undefined;
 
-  if (!coords || coords.length < 2) {
+  const valid = (coords ?? []).filter(([lng, lat]) => isValidLngLat(lng, lat));
+
+  if (valid.length < 2) {
     if (map.getLayer(ROUTE_LAYER)) map.removeLayer(ROUTE_LAYER);
     if (existing) map.removeSource(ROUTE_SOURCE);
     return;
@@ -39,7 +54,7 @@ function setRouteLine(
   const data: GeoJSON.Feature<GeoJSON.LineString> = {
     type: "Feature",
     properties: {},
-    geometry: { type: "LineString", coordinates: coords },
+    geometry: { type: "LineString", coordinates: valid },
   };
 
   if (existing) {
@@ -63,7 +78,8 @@ function setRouteLine(
 
 /**
  * Reusable live map. Renders markers (truck / origin / destination) and, when a
- * `route` is given, a dashed A→B direction line. Used by Admin, Driver and Customer.
+ * `route` is given, a dashed A→B direction line. Invalid coordinates are ignored
+ * so bad data never crashes the map. Used by Admin, Driver and Customer.
  */
 export default function LiveMap({
   markers,
@@ -107,9 +123,10 @@ export default function LiveMap({
     const map = mapRef.current;
     if (!map) return;
 
+    const valid = markers.filter((m) => isValidLngLat(m.lng, m.lat));
+
     const seen = new Set<string>();
-    for (const m of markers) {
-      if (m.lng == null || m.lat == null) continue;
+    for (const m of valid) {
       seen.add(m.id);
       let marker = markersRef.current.get(m.id);
       if (!marker) {
@@ -125,7 +142,7 @@ export default function LiveMap({
         marker.setLngLat([m.lng, m.lat]);
       }
     }
-    // remove stale
+    // remove stale (incl. markers that became invalid)
     for (const [id, marker] of markersRef.current) {
       if (!seen.has(id)) {
         marker.remove();
@@ -133,9 +150,9 @@ export default function LiveMap({
       }
     }
 
-    if (fit && markers.length > 0) {
+    if (fit && valid.length > 0) {
       const bounds = new maplibregl.LngLatBounds();
-      markers.forEach((m) => bounds.extend([m.lng, m.lat]));
+      valid.forEach((m) => bounds.extend([m.lng, m.lat]));
       map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 });
     }
   }, [markers, fit]);
