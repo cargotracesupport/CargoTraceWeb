@@ -20,6 +20,25 @@ const COLORS: Record<NonNullable<MapMarker["kind"]>, string> = {
   dest: "#ffb74d",
 };
 
+const TRUCK_SVG =
+  '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="6.5" width="11" height="9" rx="1.5"/><path d="M12.5 9.5h4l3.5 3.5v2.5h-7.5z"/><circle cx="6" cy="18" r="1.9"/><circle cx="16.5" cy="18" r="1.9"/></svg>';
+
+/** Build a marker element: a truck badge for the live vehicle, a dot for origin/dest. */
+function makeMarkerEl(m: MapMarker): HTMLElement {
+  const el = document.createElement("div");
+  const kind = m.kind ?? "truck";
+  const color = COLORS[kind];
+  if (kind === "truck") {
+    el.className = "ct-truck-marker";
+    el.style.cssText = `width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${color};border:2.5px solid #fff;color:#0a2a14;cursor:pointer;`;
+    el.innerHTML = TRUCK_SVG;
+  } else {
+    el.style.cssText = `width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;background:${color};box-shadow:0 0 0 4px ${color}33;cursor:pointer;`;
+  }
+  if (m.label) el.title = m.label;
+  return el;
+}
+
 // Guard against bad data: MapLibre throws on out-of-range coordinates, which
 // would crash the whole page. Anything invalid is simply skipped.
 function isValidLngLat(lng: number, lat: number): boolean {
@@ -136,11 +155,7 @@ export default function LiveMap({
       seen.add(m.id);
       let marker = markersRef.current.get(m.id);
       if (!marker) {
-        const el = document.createElement("div");
-        el.style.cssText = `width:16px;height:16px;border-radius:50%;border:2.5px solid #fff;
-          background:${COLORS[m.kind ?? "truck"]};box-shadow:0 0 0 4px ${COLORS[m.kind ?? "truck"]}33;cursor:pointer;`;
-        if (m.label) el.title = m.label;
-        marker = new maplibregl.Marker({ element: el })
+        marker = new maplibregl.Marker({ element: makeMarkerEl(m) })
           .setLngLat([m.lng, m.lat])
           .addTo(map);
         markersRef.current.set(m.id, marker);

@@ -130,3 +130,19 @@ body {
 html.dark .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
   filter: invert(1) hue-rotate(180deg) brightness(1.1);
 }
+
+/* Live vehicle marker — truck badge with a gentle "moving" pulse ring */
+@keyframes ct-truck-pulse {
+  0% {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 0 rgb(var(--c-green) / 0.5);
+  }
+  70% {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 10px rgb(var(--c-green) / 0);
+  }
+  100% {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 0 rgb(var(--c-green) / 0);
+  }
+}
+.ct-truck-marker {
+  animation: ct-truck-pulse 2s ease-out infinite;
+}
