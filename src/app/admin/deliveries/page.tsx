@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Delivery } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import SimulateButton from "@/components/SimulateButton";
+import DeleteButton from "@/components/DeleteButton";
 
 type DeliveryRow = Delivery & {
   driver: { full_name: string | null } | null;
@@ -61,6 +62,7 @@ export default async function AdminDeliveriesPage() {
                 <th className="ct-label mb-0 px-4 py-3">Created</th>
                 <th className="ct-label mb-0 px-4 py-3">Tracking</th>
                 <th className="ct-label mb-0 px-4 py-3">Simulate</th>
+                <th className="ct-label mb-0 px-4 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -118,6 +120,13 @@ export default async function AdminDeliveriesPage() {
                           ? { lat: d.dest_lat, lng: d.dest_lng }
                           : null
                       }
+                    />
+                  </td>
+                  <td className="px-4 py-3">
+                    <DeleteButton
+                      table="deliveries"
+                      id={d.id}
+                      confirmText="Delete this delivery? This removes its tracking history."
                     />
                   </td>
                 </tr>

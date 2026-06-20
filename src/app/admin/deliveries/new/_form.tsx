@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, Vehicle, Device } from "@/lib/types";
 import LocationPicker, { type LatLng } from "@/components/LocationPicker";
+import Spinner from "@/components/Spinner";
 
 interface Created {
   token: string;
@@ -500,7 +501,13 @@ export default function NewDeliveryForm({
           Cancel
         </Link>
         <button type="submit" disabled={busy} className="ct-btn-primary">
-          {busy ? "Creating…" : "Create delivery"}
+          {busy ? (
+            <>
+              <Spinner /> Creating…
+            </>
+          ) : (
+            "Create delivery"
+          )}
         </button>
       </div>
     </form>

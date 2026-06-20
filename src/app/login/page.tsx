@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import Spinner from "@/components/Spinner";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -119,7 +120,13 @@ export default function LoginPage() {
               disabled={loading}
               className="ct-btn-primary w-full"
             >
-              {loading ? "Please wait…" : "Sign in"}
+              {loading ? (
+                <>
+                  <Spinner /> Signing in…
+                </>
+              ) : (
+                "Sign in"
+              )}
             </button>
           </form>
         </div>

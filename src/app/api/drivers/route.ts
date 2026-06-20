@@ -75,3 +75,44 @@ export async function POST(req: Request) {
     driver: { id: created.user.id, full_name: fullName, email, phone },
   });
 }
+
+/**
+ * Admin-only: delete a driver (and their login). DELETE /api/drivers?id=<profileId>
+ * Verifies the target is a driver in the caller's org before removing the auth user
+ * (the profile row cascades; assigned deliveries keep their history with driver_id set null).
+ */
+export async function DELETE(req: Request) {
+  const session = await getSessionProfile();
+  if (!session || session.profile.role !== "admin") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id) {
+    return NextResponse.json({ error: "id required" }, { status: 400 });
+  }
+
+  const admin = createAdminClient();
+
+  // Defense in depth: only delete a driver that belongs to this admin's org.
+  const { data: target } = await admin
+    .from("profiles")
+    .select("id, org_id, role")
+    .eq("id", id)
+    .single();
+
+  if (
+    !target ||
+    target.org_id !== session.profile.org_id ||
+    target.role !== "driver"
+  ) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
+  const { error } = await admin.auth.admin.deleteUser(id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ ok: true });
+}

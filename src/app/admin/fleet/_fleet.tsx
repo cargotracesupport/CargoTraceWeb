@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile, Vehicle, Device } from "@/lib/types";
+import Spinner from "@/components/Spinner";
+import DeleteButton from "@/components/DeleteButton";
 
 export default function Fleet({
   orgId,
@@ -148,7 +150,13 @@ function DriversCard({ drivers }: { drivers: Profile[] }) {
           {error ? <FormError message={error} /> : null}
 
           <button type="submit" disabled={busy} className="ct-btn-primary">
-            {busy ? "Adding…" : "Create driver"}
+            {busy ? (
+              <>
+                <Spinner /> Adding…
+              </>
+            ) : (
+              "Create driver"
+            )}
           </button>
         </form>
       ) : null}
@@ -158,15 +166,21 @@ function DriversCard({ drivers }: { drivers: Profile[] }) {
       ) : (
         <ul className="divide-y divide-border">
           {drivers.map((d) => (
-            <li key={d.id} className="px-4 py-3">
-              <p className="text-sm font-medium text-text">
-                {d.full_name ?? "Unnamed driver"}
-              </p>
-              {d.phone ? (
-                <p className="font-mono text-xs text-muted2">{d.phone}</p>
-              ) : (
-                <p className="text-xs text-muted">No phone</p>
-              )}
+            <li
+              key={d.id}
+              className="flex items-start justify-between gap-2 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-text">
+                  {d.full_name ?? "Unnamed driver"}
+                </p>
+                {d.phone ? (
+                  <p className="font-mono text-xs text-muted2">{d.phone}</p>
+                ) : (
+                  <p className="text-xs text-muted">No phone</p>
+                )}
+              </div>
+              <DeleteDriverButton id={d.id} />
             </li>
           ))}
         </ul>
@@ -259,7 +273,13 @@ function VehiclesCard({
           {error ? <FormError message={error} /> : null}
 
           <button type="submit" disabled={busy} className="ct-btn-primary">
-            {busy ? "Adding…" : "Add vehicle"}
+            {busy ? (
+              <>
+                <Spinner /> Adding…
+              </>
+            ) : (
+              "Add vehicle"
+            )}
           </button>
         </form>
       ) : null}
@@ -269,13 +289,23 @@ function VehiclesCard({
       ) : (
         <ul className="divide-y divide-border">
           {vehicles.map((v) => (
-            <li key={v.id} className="px-4 py-3">
-              <p className="text-sm font-medium text-text">{v.name}</p>
-              {v.plate ? (
-                <p className="font-mono text-xs text-muted2">{v.plate}</p>
-              ) : (
-                <p className="text-xs text-muted">No plate</p>
-              )}
+            <li
+              key={v.id}
+              className="flex items-start justify-between gap-2 px-4 py-3"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-text">{v.name}</p>
+                {v.plate ? (
+                  <p className="font-mono text-xs text-muted2">{v.plate}</p>
+                ) : (
+                  <p className="text-xs text-muted">No plate</p>
+                )}
+              </div>
+              <DeleteButton
+                table="vehicles"
+                id={v.id}
+                confirmText="Delete this vehicle?"
+              />
             </li>
           ))}
         </ul>
@@ -396,7 +426,13 @@ function DevicesCard({
           {error ? <FormError message={error} /> : null}
 
           <button type="submit" disabled={busy} className="ct-btn-primary">
-            {busy ? "Adding…" : "Add device"}
+            {busy ? (
+              <>
+                <Spinner /> Adding…
+              </>
+            ) : (
+              "Add device"
+            )}
           </button>
         </form>
       ) : null}
@@ -408,16 +444,26 @@ function DevicesCard({
           {devices.map((dev) => {
             const vn = vehicleName(dev.vehicle_id);
             return (
-              <li key={dev.id} className="px-4 py-3">
-                <p className="text-sm font-medium text-text">
-                  {dev.label ?? "Device"}
-                </p>
-                <p className="font-mono text-xs text-muted2">
-                  {dev.hardware_id}
-                </p>
-                <p className="text-xs text-muted">
-                  {vn ? `On ${vn}` : "Unassigned"}
-                </p>
+              <li
+                key={dev.id}
+                className="flex items-start justify-between gap-2 px-4 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-text">
+                    {dev.label ?? "Device"}
+                  </p>
+                  <p className="font-mono text-xs text-muted2">
+                    {dev.hardware_id}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {vn ? `On ${vn}` : "Unassigned"}
+                  </p>
+                </div>
+                <DeleteButton
+                  table="devices"
+                  id={dev.id}
+                  confirmText="Delete this device?"
+                />
               </li>
             );
           })}
@@ -428,6 +474,45 @@ function DevicesCard({
 }
 
 /* ── Shared bits ──────────────────────────────────────────────────────── */
+
+function DeleteDriverButton({ id }: { id: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  async function onClick() {
+    if (!window.confirm("Delete this driver's account? This can't be undone."))
+      return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/drivers?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(j?.error ?? `Failed (${res.status})`);
+      }
+      router.refresh();
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "Could not delete driver.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      title="Delete driver"
+      className="ct-btn-ghost px-2 py-1 text-xs hover:border-red hover:text-red disabled:opacity-50"
+    >
+      {busy ? <Spinner /> : "Delete"}
+    </button>
+  );
+}
 
 function CardHeader({
   title,
