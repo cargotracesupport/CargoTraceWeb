@@ -1,23 +1,28 @@
 import type { Config } from "tailwindcss";
 
+const v = (name: string) => `rgb(var(${name}) / <alpha-value>)`;
+
 const config: Config = {
+  darkMode: "class",
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        bg: "#07090d",
-        s1: "#0d1118",
-        s2: "#111822",
-        s3: "#162030",
-        border: "#1a2a38",
-        border2: "#1f3245",
-        green: "#00e676",
-        amber: "#ffb74d",
-        red: "#ff5252",
-        blue: "#40c4ff",
-        text: "#dde6ef",
-        muted: "#3d5466",
-        muted2: "#6a8a9e",
+        bg: v("--c-bg"),
+        s1: v("--c-s1"),
+        s2: v("--c-s2"),
+        s3: v("--c-s3"),
+        border: v("--c-border"),
+        border2: v("--c-border2"),
+        green: v("--c-green"),
+        "green-hover": v("--c-green-hover"),
+        amber: v("--c-amber"),
+        red: v("--c-red"),
+        blue: v("--c-blue"),
+        text: v("--c-text"),
+        muted: v("--c-muted"),
+        muted2: v("--c-muted2"),
+        "on-accent": v("--c-on-accent"),
       },
       fontFamily: {
         sans: ["var(--font-dm-sans)", "system-ui", "sans-serif"],

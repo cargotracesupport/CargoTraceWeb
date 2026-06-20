@@ -1,64 +1,91 @@
 /* ───────────────────────────────────────────────────────────────
-   CargoTrace Design System — canonical tokens.
-   Imported from the Claude Design handoff (project 467442bc).
-   Tailwind utilities mirror these values; this file is the source of truth.
+   CargoTrace Design System — themeable tokens.
+   Colors are RGB triplets so Tailwind can apply opacity (`/10`, `/85`).
+   :root = LIGHT theme (default).  html.dark = DARK theme.
    ─────────────────────────────────────────────────────────────── */
 :root {
+  color-scheme: light;
+
   /* Surfaces */
-  --ct-bg: #07090d;
-  --ct-s1: #0d1118;
-  --ct-s2: #111822;
-  --ct-s3: #162030;
-  --ct-border: #1a2a38;
-  --ct-border-2: #1f3245;
+  --c-bg: 244 246 249;
+  --c-s1: 255 255 255;
+  --c-s2: 238 241 246;
+  --c-s3: 228 233 240;
+  --c-border: 224 230 238;
+  --c-border2: 203 213 225;
 
-  /* Signal accent */
-  --ct-green: #00e676;
-  --ct-green-hover: #1aff90;
-  --ct-green-dim: rgba(0, 230, 118, 0.08);
+  /* Signal accent (deeper green for contrast on light) */
+  --c-green: 0 135 74;
+  --c-green-hover: 8 153 84;
 
-  /* Status hues */
-  --ct-amber: #ffb74d;
-  --ct-red: #ff5252;
-  --ct-blue: #40c4ff;
+  /* Status hues (darkened for readable text on light) */
+  --c-amber: 194 102 8;
+  --c-red: 220 38 38;
+  --c-blue: 2 132 199;
 
   /* Text */
-  --ct-text: #dde6ef;
-  --ct-muted-2: #6a8a9e;
-  --ct-muted: #3d5466;
-  --ct-on-accent: #000000;
-  --ct-focus-ring: rgba(0, 230, 118, 0.16);
-  --ct-map-bg: #060d14;
+  --c-text: 22 32 43;
+  --c-muted2: 81 96 110;
+  --c-muted: 140 156 172;
+  --c-on-accent: 255 255 255;
 
-  /* Type */
+  /* Page + map backgrounds */
+  --app-bg: radial-gradient(
+      1100px 520px at 50% -8%,
+      rgba(0, 135, 74, 0.06),
+      transparent 60%
+    ),
+    #f4f6f9;
+  --map-bg: #e8edf2;
+
+  /* ── Design-system constants (theme-agnostic) ── */
   --ct-font-sans: var(--font-dm-sans), "DM Sans", system-ui, sans-serif;
   --ct-font-mono: var(--font-dm-mono), "DM Mono", "JetBrains Mono", ui-monospace,
     "SFMono-Regular", Menlo, monospace;
-  --ct-tracking-tight: -0.5px;
-  --ct-tracking-label: 1.2px;
-  --ct-tracking-eyebrow: 2px;
-
-  /* Radii */
   --ct-radius-sm: 5px;
   --ct-radius-md: 6px;
   --ct-radius-lg: 8px;
   --ct-radius-xl: 12px;
-  --ct-radius-pill: 999px;
+  --ct-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.03),
+    0 10px 30px -16px rgba(0, 0, 0, 0.25);
+  --ct-shadow-pop: 0 24px 60px -20px rgba(20, 40, 60, 0.35);
+  --ct-shadow-accent: 0 8px 22px -10px rgba(0, 135, 74, 0.45);
+  /* Theme-aware (resolves --c-green per active theme) */
+  --ct-focus-shadow: 0 0 0 3px rgb(var(--c-green) / 0.16);
+}
 
-  /* Effects */
+html.dark {
+  color-scheme: dark;
+
+  --c-bg: 7 9 13;
+  --c-s1: 13 17 24;
+  --c-s2: 17 24 34;
+  --c-s3: 22 32 48;
+  --c-border: 26 42 56;
+  --c-border2: 31 50 69;
+
+  --c-green: 0 230 118;
+  --c-green-hover: 26 255 144;
+
+  --c-amber: 255 183 77;
+  --c-red: 255 82 82;
+  --c-blue: 64 196 255;
+
+  --c-text: 221 230 239;
+  --c-muted2: 106 138 158;
+  --c-muted: 61 84 102;
+  --c-on-accent: 0 0 0;
+
+  --app-bg: radial-gradient(
+      1100px 520px at 50% -8%,
+      rgba(0, 230, 118, 0.06),
+      transparent 60%
+    ),
+    #07090d;
+  --map-bg: #060d14;
+
   --ct-shadow-card: inset 0 1px 0 0 rgba(255, 255, 255, 0.03),
     0 10px 30px -16px rgba(0, 0, 0, 0.7);
   --ct-shadow-pop: 0 32px 80px rgba(0, 0, 0, 0.7);
   --ct-shadow-accent: 0 8px 22px -10px rgba(0, 230, 118, 0.7);
-  --ct-focus-shadow: 0 0 0 3px var(--ct-focus-ring);
-  --ct-glow-green: radial-gradient(
-    1100px 520px at 50% -8%,
-    rgba(0, 230, 118, 0.06),
-    transparent 60%
-  );
-
-  /* Layout chrome */
-  --ct-topbar-h: 56px;
-  --ct-sidebar-w: 208px;
-  --ct-hit: 44px;
 }

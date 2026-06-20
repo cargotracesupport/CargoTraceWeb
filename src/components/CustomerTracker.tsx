@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import { BrandMark, Wordmark, Check, MapPin, Flag } from "@/components/icons";
+import ThemeToggle from "@/components/ThemeToggle";
 import { estimateEtaMinutes, formatEta } from "@/lib/eta";
 import type { DeliveryStatus } from "@/lib/types";
 
@@ -135,7 +136,10 @@ export default function CustomerTracker({
           <BrandMark className="h-7 w-7" />
           <Wordmark className="text-lg" />
         </div>
-        <DeliveryStatusBadge status={status} />
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <DeliveryStatusBadge status={status} />
+        </div>
       </header>
 
       <div className="flex-1 flex flex-col gap-4 p-4 max-w-2xl w-full mx-auto">

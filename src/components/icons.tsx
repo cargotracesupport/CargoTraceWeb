@@ -154,6 +154,19 @@ export const Check = (p: IconProps) => (
   </Svg>
 );
 
+export const Sun = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
+  </Svg>
+);
+
+export const Moon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.5 6.5 0 0 0 9.8 9.8Z" />
+  </Svg>
+);
+
 export const Play = ({ className = "h-5 w-5", ...rest }: IconProps) => (
   <svg
     viewBox="0 0 24 24"
@@ -170,7 +183,7 @@ export const Play = ({ className = "h-5 w-5", ...rest }: IconProps) => (
 export function BrandMark({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <span
-      className={`inline-flex items-center justify-center rounded-xl bg-green text-black shadow-[0_8px_22px_-10px_rgba(0,230,118,0.8)] ${className}`}
+      className={`inline-flex items-center justify-center rounded-xl bg-green text-on-accent shadow-[var(--ct-shadow-accent)] ${className}`}
     >
       <Truck className="h-[58%] w-[58%]" strokeWidth={2.4} />
     </span>

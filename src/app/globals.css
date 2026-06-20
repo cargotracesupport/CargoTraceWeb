@@ -4,10 +4,6 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
-}
-
 /* Data (coordinates, IDs, ETA, stats, timestamps) renders in DM Mono with
    tabular figures so numbers never shift width — per the design system. */
 .font-mono {
@@ -20,17 +16,15 @@ body {
 }
 
 body {
-  background:
-    radial-gradient(1100px 520px at 50% -8%, rgba(0, 230, 118, 0.06), transparent 60%),
-    #07090d;
+  background: var(--app-bg);
   background-attachment: fixed;
-  color: #dde6ef;
+  color: rgb(var(--c-text));
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: rgba(0, 230, 118, 0.25);
+  background: rgb(var(--c-green) / 0.25);
 }
 
 /* Thin, refined scrollbars */
@@ -39,14 +33,10 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1f3245;
+  background: rgb(var(--c-border2));
   border: 2px solid transparent;
   background-clip: padding-box;
   border-radius: 8px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #2a4358;
-  background-clip: padding-box;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
@@ -54,7 +44,7 @@ body {
 
 /* Visible keyboard focus everywhere */
 :focus-visible {
-  outline: 2px solid rgba(0, 230, 118, 0.7);
+  outline: 2px solid rgb(var(--c-green) / 0.7);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -63,9 +53,7 @@ body {
   /* Surfaces */
   .ct-card {
     @apply rounded-xl border border-border/90 bg-s1/85 backdrop-blur-sm;
-    box-shadow:
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.03),
-      0 10px 30px -16px rgba(0, 0, 0, 0.7);
+    box-shadow: var(--ct-shadow-card);
   }
   .ct-stat {
     @apply ct-card flex flex-col gap-1 p-4 transition-colors duration-200 hover:border-border2;
@@ -75,7 +63,7 @@ body {
   .ct-input {
     @apply w-full rounded-lg border border-border2 bg-s2/80 px-3.5 py-2.5 text-sm text-text outline-none
            transition-[border-color,box-shadow] duration-200 placeholder:text-muted
-           focus:border-green focus:shadow-[0_0_0_3px_rgba(0,230,118,0.16)];
+           focus:border-green focus:shadow-[var(--ct-focus-shadow)];
   }
   .ct-label {
     @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[1.2px] text-muted2;
@@ -89,7 +77,7 @@ body {
            disabled:pointer-events-none disabled:opacity-50;
   }
   .ct-btn-primary {
-    @apply ct-btn bg-green text-black shadow-[0_8px_22px_-10px_rgba(0,230,118,0.7)] hover:bg-[#1aff90];
+    @apply ct-btn bg-green text-on-accent shadow-[var(--ct-shadow-accent)] hover:bg-green-hover;
   }
   .ct-btn-ghost {
     @apply ct-btn border border-border2 bg-s2/40 text-muted2 hover:border-green/50 hover:bg-s2 hover:text-text;
@@ -122,22 +110,23 @@ body {
   }
 }
 
-/* MapLibre — match the dark theme */
+/* MapLibre — themed controls */
 .maplibregl-map {
-  background: #060d14;
+  background: var(--map-bg);
 }
 .maplibregl-ctrl-attrib {
   font-size: 9px;
 }
 .maplibregl-ctrl-group {
-  background: rgba(13, 17, 23, 0.92) !important;
-  border: 1px solid #1f3245 !important;
+  background: rgb(var(--c-s1) / 0.92) !important;
+  border: 1px solid rgb(var(--c-border2)) !important;
   border-radius: 8px !important;
   overflow: hidden;
 }
 .maplibregl-ctrl-group button + button {
-  border-top: 1px solid #1f3245 !important;
+  border-top: 1px solid rgb(var(--c-border2)) !important;
 }
-.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+/* Invert the dark control glyphs only in dark mode */
+html.dark .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
   filter: invert(1) hue-rotate(180deg) brightness(1.1);
 }

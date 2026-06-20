@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import AdminNav from "./_nav";
 import { BrandMark, Wordmark, LiveDot, LogOut, Avatar } from "@/components/icons";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default async function AdminLayout({
   children,
@@ -24,6 +25,7 @@ export default async function AdminLayout({
           </div>
 
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <span className="hidden max-w-[40vw] truncate text-sm text-muted2 sm:inline">
               {session.profile.full_name}
             </span>

@@ -21,13 +21,23 @@ export const metadata: Metadata = {
   description: "Track deliveries from A to B in real time.",
 };
 
+// Applies the saved theme before paint (default = light) to avoid a flash.
+const themeInit = `(function(){try{if(localStorage.getItem('theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}})();`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${dmMono.variable}`}>
+    <html
+      lang="en"
+      className={`${dmSans.variable} ${dmMono.variable}`}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInit }} />
+      </head>
       <body className="font-sans">{children}</body>
     </html>
   );

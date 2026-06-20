@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Spinner from "@/components/Spinner";
 import { BrandMark } from "@/components/icons";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -37,13 +38,14 @@ export default function LoginPage() {
 
   return (
     <main className="relative min-h-screen w-full overflow-hidden bg-bg flex items-center justify-center px-4 py-10">
+      <ThemeToggle className="absolute right-4 top-4 z-10" />
       {/* Subtle control-panel grid backdrop */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.35]"
         style={{
           backgroundImage:
-            "linear-gradient(#0d1118 1px, transparent 1px), linear-gradient(90deg, #0d1118 1px, transparent 1px)",
+            "linear-gradient(rgb(var(--c-border) / 0.6) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--c-border) / 0.6) 1px, transparent 1px)",
           backgroundSize: "44px 44px",
           maskImage:
             "radial-gradient(ellipse 80% 60% at 50% 40%, #000 40%, transparent 100%)",

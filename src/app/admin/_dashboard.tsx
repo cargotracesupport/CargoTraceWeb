@@ -74,19 +74,42 @@ export default function Dashboard({
     };
   }, []);
 
-  const markers: MapMarker[] = useMemo(
-    () =>
-      deliveries
-        .filter((d) => d.last_lat != null && d.last_lng != null)
-        .map((d) => ({
-          id: d.id,
-          lat: d.last_lat as number,
-          lng: d.last_lng as number,
-          label: d.reference ?? d.goods ?? "Delivery",
-          kind: "truck" as const,
-        })),
-    [deliveries],
-  );
+  // Build markers from every active delivery: the live truck when we have a
+  // position, plus its pickup/drop-off pins. This guarantees the map always has
+  // points to fit, so it auto-centers on the delivery locations (no blank ocean).
+  const markers: MapMarker[] = useMemo(() => {
+    const out: MapMarker[] = [];
+    for (const d of deliveries) {
+      if (d.last_lat != null && d.last_lng != null) {
+        out.push({
+          id: `${d.id}-truck`,
+          lat: d.last_lat,
+          lng: d.last_lng,
+          label: d.reference ?? "Delivery",
+          kind: "truck",
+        });
+      }
+      if (d.origin_lat != null && d.origin_lng != null) {
+        out.push({
+          id: `${d.id}-origin`,
+          lat: d.origin_lat,
+          lng: d.origin_lng,
+          label: d.origin_label ?? "Pickup",
+          kind: "origin",
+        });
+      }
+      if (d.dest_lat != null && d.dest_lng != null) {
+        out.push({
+          id: `${d.id}-dest`,
+          lat: d.dest_lat,
+          lng: d.dest_lng,
+          label: d.dest_label ?? "Drop-off",
+          kind: "dest",
+        });
+      }
+    }
+    return out;
+  }, [deliveries]);
 
   const tiles = [
     { label: "En route", value: counts.enRoute, accent: "text-green", Icon: Truck },

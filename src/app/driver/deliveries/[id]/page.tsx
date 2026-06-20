@@ -5,6 +5,33 @@ import type { Delivery } from "@/lib/types";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import DriverActions from "./_actions";
+import { estimateEtaMinutes, formatEta } from "@/lib/eta";
+
+function timeAgo(iso: string | null): string {
+  if (!iso) return "—";
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const h = Math.floor(mins / 60);
+  return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+}
+
+function Stat({
+  label,
+  value,
+  color = "text-text",
+}: {
+  label: string;
+  value: string;
+  color?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between border-b border-border/50 py-2.5 last:border-0">
+      <span className="text-xs text-muted2">{label}</span>
+      <span className={`font-mono text-sm font-medium ${color}`}>{value}</span>
+    </div>
+  );
+}
 
 export default async function DriverDeliveryPage({
   params,
@@ -75,6 +102,18 @@ export default async function DriverDeliveryPage({
         ]
       : undefined;
 
+  const liveEta =
+    delivery.last_lat != null &&
+    delivery.last_lng != null &&
+    delivery.dest_lat != null &&
+    delivery.dest_lng != null
+      ? estimateEtaMinutes(
+          { lat: delivery.last_lat, lng: delivery.last_lng },
+          { lat: delivery.dest_lat, lng: delivery.dest_lng },
+          delivery.last_speed,
+        )
+      : null;
+
   return (
     <div className="flex flex-col gap-4">
       <Link href="/driver" className="text-sm text-muted2 hover:text-green">
@@ -143,6 +182,34 @@ export default async function DriverDeliveryPage({
           )}
         </div>
       </div>
+
+      {delivery.last_lat != null && delivery.last_lng != null ? (
+        <div className="ct-card overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <h2 className="text-sm font-semibold">Live position</h2>
+            <span className="ct-pill bg-green/10 text-green">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
+              GPS lock
+            </span>
+          </div>
+          <div className="px-4">
+            <Stat
+              label="Coordinates"
+              value={`${delivery.last_lat.toFixed(4)}°, ${delivery.last_lng.toFixed(4)}°`}
+              color="text-blue"
+            />
+            {delivery.last_speed != null ? (
+              <Stat
+                label="Speed"
+                value={`${Math.round(delivery.last_speed)} km/h`}
+                color="text-green"
+              />
+            ) : null}
+            <Stat label="ETA" value={formatEta(liveEta)} color="text-green" />
+            <Stat label="Updated" value={timeAgo(delivery.last_position_at)} />
+          </div>
+        </div>
+      ) : null}
 
       <DriverActions
         deliveryId={delivery.id}

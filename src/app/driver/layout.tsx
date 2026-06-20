@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { BrandMark, Wordmark, LogOut, LiveDot } from "@/components/icons";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default async function DriverLayout({
   children,
@@ -23,6 +24,7 @@ export default async function DriverLayout({
             </span>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <span className="ct-pill bg-green/10 text-green">
               <LiveDot /> TX
             </span>
