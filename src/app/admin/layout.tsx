@@ -40,19 +40,22 @@ export default async function AdminLayout({
         </div>
       </header>
 
-      {/* Sidebar (desktop) — collapses to a top nav row on mobile */}
+      {/* Sidebar (desktop) */}
       <aside className="fixed bottom-0 left-0 top-14 z-20 hidden w-52 border-r border-border bg-s1/60 md:block">
-        <AdminNav />
+        <AdminNav variant="sidebar" />
       </aside>
 
-      {/* Mobile nav row, directly under the topbar */}
-      <div className="fixed inset-x-0 top-14 z-20 border-b border-border bg-s1/80 backdrop-blur md:hidden">
-        <AdminNav />
-      </div>
-
-      <main className="pt-[7rem] md:pl-52 md:pt-14">
-        <div className="p-4">{children}</div>
+      <main className="pt-14 md:pl-52">
+        <div className="p-4 pb-24 md:pb-4">{children}</div>
       </main>
+
+      {/* Mobile: fixed bottom tab bar */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-s1/95 backdrop-blur md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <AdminNav variant="bottom" />
+      </div>
     </div>
   );
 }

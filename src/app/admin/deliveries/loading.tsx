@@ -4,7 +4,7 @@ export default function Loading() {
   return (
     <div className="flex flex-col gap-4">
       <SkHeading />
-      <SkRows count={4} />
+      <SkRows count={6} />
     </div>
   );
 }
