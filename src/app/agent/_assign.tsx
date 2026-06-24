@@ -367,14 +367,16 @@ function DeliveryRow({
           <label className="sr-only" htmlFor={`veh-${delivery.id}`}>
             Vehicle number
           </label>
+          {/* Read-only: the vehicle comes from the chosen driver. */}
           <select
             id={`veh-${delivery.id}`}
             value={vehicle}
-            onChange={(e) => setVehicle(e.target.value)}
-            disabled={busy || !selected}
-            className="ct-input sm:flex-1"
+            onChange={() => {}}
+            disabled
+            title="Vehicle is set from the driver — edit it on the driver"
+            className="ct-input cursor-not-allowed sm:flex-1"
           >
-            <option value="">— Vehicle number —</option>
+            <option value="">— vehicle from driver —</option>
             {vehicles.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.plate ?? v.name ?? "Vehicle"}

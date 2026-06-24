@@ -70,7 +70,7 @@ export function PeopleCard({
           email: email.trim(),
           password,
           phone: phone.trim() || undefined,
-          ...(vehicles ? { vehicleId: vehicleId || undefined } : {}),
+          ...(vehicles ? { vehicleId } : {}),
         }),
       });
       if (!res.ok) {
@@ -169,21 +169,29 @@ export function PeopleCard({
           {vehicles ? (
             <div>
               <label className="ct-label" htmlFor={`${idPrefix}_vehicle`}>
-                Vehicle (optional)
+                Vehicle number *
               </label>
               <select
                 id={`${idPrefix}_vehicle`}
+                required
                 value={vehicleId}
                 onChange={(e) => setVehicleId(e.target.value)}
                 className="ct-input"
               >
-                <option value="">No vehicle</option>
+                <option value="" disabled>
+                  Select a vehicle
+                </option>
                 {vehicles.map((v) => (
                   <option key={v.id} value={v.id}>
                     {vehLabel(v)}
                   </option>
                 ))}
               </select>
+              {vehicles.length === 0 ? (
+                <p className="mt-1 text-xs text-amber">
+                  Add a vehicle first, then you can assign one here.
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -285,36 +293,52 @@ function PersonRow({
     return (
       <li className="px-4 py-3">
         <form onSubmit={save} className="flex flex-col gap-2">
-          <input
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            required
-            placeholder="Full name"
-            className="ct-input"
-            aria-label="Full name"
-          />
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone (optional)"
-            className="ct-input"
-            aria-label="Phone"
-          />
           {vehicles ? (
-            <select
-              value={vehicleId}
-              onChange={(e) => setVehicleId(e.target.value)}
-              className="ct-input"
-              aria-label="Vehicle"
-            >
-              <option value="">No vehicle</option>
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {vehLabel(v)}
+            // Drivers: only the vehicle number is editable.
+            <>
+              <p className="text-sm font-medium text-text">
+                {person.full_name ?? `Unnamed ${noun}`}
+              </p>
+              <label className="ct-label" htmlFor={`edit-veh-${person.id}`}>
+                Vehicle number
+              </label>
+              <select
+                id={`edit-veh-${person.id}`}
+                required
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
+                className="ct-input"
+                aria-label="Vehicle"
+              >
+                <option value="" disabled>
+                  Select a vehicle
                 </option>
-              ))}
-            </select>
-          ) : null}
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {vehLabel(v)}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <>
+              <input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                placeholder="Full name"
+                className="ct-input"
+                aria-label="Full name"
+              />
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Phone (optional)"
+                className="ct-input"
+                aria-label="Phone"
+              />
+            </>
+          )}
           {error ? <FormError message={error} /> : null}
           <div className="flex gap-2">
             <button
