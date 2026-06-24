@@ -5,9 +5,10 @@ import { createClient } from "@/lib/supabase/client";
 import type { Delivery } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import Spinner from "@/components/Spinner";
-import { Avatar, MapPin, Flag, Package, Check, Search } from "@/components/icons";
+import { Avatar, MapPin, Flag, Package, Check, Search, Truck } from "@/components/icons";
 
 export type DriverOption = { id: string; full_name: string | null };
+export type VehicleOption = { id: string; plate: string | null; name: string | null };
 
 const DONE = new Set(["delivered", "cancelled"]);
 // A delivery can still be (re)assigned only while pending or assigned.
@@ -16,9 +17,11 @@ const ASSIGNABLE = new Set(["pending", "assigned"]);
 export default function AssignConsole({
   initialDeliveries,
   drivers,
+  vehicles,
 }: {
   initialDeliveries: Delivery[];
   drivers: DriverOption[];
+  vehicles: VehicleOption[];
 }) {
   const [rows, setRows] = useState<Delivery[]>(initialDeliveries);
   const [query, setQuery] = useState("");
@@ -27,6 +30,15 @@ export default function AssignConsole({
     (id: string | null) =>
       id ? (drivers.find((d) => d.id === id)?.full_name ?? "Driver") : null,
     [drivers],
+  );
+
+  const vehicleLabel = useCallback(
+    (id: string | null) => {
+      if (!id) return null;
+      const v = vehicles.find((x) => x.id === id);
+      return v ? (v.plate ?? v.name ?? "Vehicle") : null;
+    },
+    [vehicles],
   );
 
   // Keep the board live: merge in inserts/updates/deletes from other actors
@@ -141,7 +153,9 @@ export default function AssignConsole({
                 key={d.id}
                 delivery={d}
                 drivers={drivers}
+                vehicles={vehicles}
                 driverName={driverName}
+                vehicleLabel={vehicleLabel}
                 onAssigned={patchRow}
               />
             ))}
@@ -157,7 +171,9 @@ export default function AssignConsole({
                 key={d.id}
                 delivery={d}
                 drivers={drivers}
+                vehicles={vehicles}
                 driverName={driverName}
+                vehicleLabel={vehicleLabel}
                 onAssigned={patchRow}
               />
             ))}
@@ -170,7 +186,9 @@ export default function AssignConsole({
                   key={d.id}
                   delivery={d}
                   drivers={drivers}
+                  vehicles={vehicles}
                   driverName={driverName}
+                  vehicleLabel={vehicleLabel}
                   onAssigned={patchRow}
                 />
               ))}
@@ -187,25 +205,33 @@ export default function AssignConsole({
 function DeliveryRow({
   delivery,
   drivers,
+  vehicles,
   driverName,
+  vehicleLabel,
   onAssigned,
 }: {
   delivery: Delivery;
   drivers: DriverOption[];
+  vehicles: VehicleOption[];
   driverName: (id: string | null) => string | null;
+  vehicleLabel: (id: string | null) => string | null;
   onAssigned: (row: Delivery) => void;
 }) {
   const [selected, setSelected] = useState<string>(delivery.driver_id ?? "");
+  const [vehicle, setVehicle] = useState<string>(delivery.vehicle_id ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Keep the picker in sync if the row changes underneath us (realtime).
+  // Keep the pickers in sync if the row changes underneath us (realtime).
   useEffect(() => {
     setSelected(delivery.driver_id ?? "");
-  }, [delivery.driver_id]);
+    setVehicle(delivery.vehicle_id ?? "");
+  }, [delivery.driver_id, delivery.vehicle_id]);
 
   const canAssign = ASSIGNABLE.has(delivery.status);
-  const dirty = selected !== (delivery.driver_id ?? "");
+  const dirty =
+    selected !== (delivery.driver_id ?? "") ||
+    vehicle !== (delivery.vehicle_id ?? "");
 
   async function assign() {
     setError(null);
@@ -214,19 +240,25 @@ function DeliveryRow({
       const supabase = createClient();
       const { data, error: err } = await supabase.rpc(
         "assign_delivery_to_driver",
-        { p_delivery_id: delivery.id, p_driver_id: selected || null },
+        {
+          p_delivery_id: delivery.id,
+          p_driver_id: selected || null,
+          p_vehicle_id: vehicle || null,
+        },
       );
       if (err) throw new Error(err.message);
       if (data) onAssigned(data as Delivery);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not assign.");
-      setSelected(delivery.driver_id ?? ""); // revert picker on failure
+      setSelected(delivery.driver_id ?? ""); // revert pickers on failure
+      setVehicle(delivery.vehicle_id ?? "");
     } finally {
       setBusy(false);
     }
   }
 
   const currentDriver = driverName(delivery.driver_id);
+  const currentVehicle = vehicleLabel(delivery.vehicle_id);
 
   return (
     <div className="ct-card p-4">
@@ -256,16 +288,21 @@ function DeliveryRow({
           ) : null}
         </div>
 
-        {/* Current driver chip */}
-        <div className="flex items-center gap-2">
+        {/* Current driver + vehicle */}
+        <div className="flex flex-col items-end gap-1">
           {currentDriver ? (
-            <>
+            <div className="flex items-center gap-2">
               <Avatar name={currentDriver} size={26} />
               <span className="text-sm font-medium">{currentDriver}</span>
-            </>
+            </div>
           ) : (
             <span className="ct-pill bg-amber/10 text-amber">Unassigned</span>
           )}
+          {currentVehicle ? (
+            <span className="inline-flex items-center gap-1 font-mono text-xs text-muted2">
+              <Truck className="h-3.5 w-3.5" /> {currentVehicle}
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -278,9 +315,13 @@ function DeliveryRow({
           <select
             id={`drv-${delivery.id}`}
             value={selected}
-            onChange={(e) => setSelected(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setSelected(v);
+              if (!v) setVehicle(""); // no driver → no vehicle
+            }}
             disabled={busy}
-            className="ct-input sm:max-w-xs"
+            className="ct-input sm:flex-1"
           >
             <option value="">— Unassigned —</option>
             {drivers.map((d) => (
@@ -289,11 +330,30 @@ function DeliveryRow({
               </option>
             ))}
           </select>
+
+          <label className="sr-only" htmlFor={`veh-${delivery.id}`}>
+            Vehicle number
+          </label>
+          <select
+            id={`veh-${delivery.id}`}
+            value={vehicle}
+            onChange={(e) => setVehicle(e.target.value)}
+            disabled={busy || !selected}
+            className="ct-input sm:flex-1"
+          >
+            <option value="">— Vehicle number —</option>
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.plate ?? v.name ?? "Vehicle"}
+              </option>
+            ))}
+          </select>
+
           <button
             type="button"
             onClick={assign}
             disabled={busy || !dirty}
-            className="ct-btn-primary sm:ml-auto"
+            className="ct-btn-primary"
           >
             {busy ? (
               <>

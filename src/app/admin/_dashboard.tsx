@@ -18,6 +18,7 @@ import { estimateEtaMinutes, formatEta } from "@/lib/eta";
 
 export type DeliveryRow = Delivery & {
   driver?: { full_name: string | null } | null;
+  vehicle?: { name: string | null; plate: string | null } | null;
 };
 
 interface Counts {
@@ -100,10 +101,17 @@ export default function Dashboard({
             const isActive = ACTIVE.includes(row.status);
             if (!isActive) return prev.filter((d) => d.id !== row.id);
             const exists = prev.some((d) => d.id === row.id);
-            // Keep the joined driver from the initial load if the live row lacks it.
+            // Keep the joined driver/vehicle from the initial load if the live
+            // row (a raw deliveries change) lacks the joins.
             if (exists) {
               return prev.map((d) =>
-                d.id === row.id ? { ...row, driver: row.driver ?? d.driver } : d,
+                d.id === row.id
+                  ? {
+                      ...row,
+                      driver: row.driver ?? d.driver,
+                      vehicle: row.vehicle ?? d.vehicle,
+                    }
+                  : d,
               );
             }
             return [row, ...prev];
@@ -353,12 +361,18 @@ function DeliveryDetail({ d, onBack }: { d: DeliveryRow; onBack: () => void }) {
             ) : null}
           </div>
           <div className="rounded-lg border border-border bg-s2 p-3">
-            <div className="ct-label">Driver</div>
+            <div className="ct-label">Driver &amp; vehicle</div>
             <div className="text-sm">
               {d.driver?.full_name ?? (
                 <span className="text-muted">Unassigned</span>
               )}
             </div>
+            {d.vehicle?.plate || d.vehicle?.name ? (
+              <div className="mt-1 inline-flex items-center gap-1 font-mono text-xs text-muted2">
+                <Truck className="h-3.5 w-3.5" />
+                {d.vehicle.plate ?? d.vehicle.name}
+              </div>
+            ) : null}
           </div>
         </div>
 
