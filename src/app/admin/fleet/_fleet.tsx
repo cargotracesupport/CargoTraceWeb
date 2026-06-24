@@ -32,6 +32,7 @@ export default function Fleet({
         createLabel="Create driver"
         emptyLabel="No drivers yet. Add one to start assigning deliveries."
         deleteConfirm="Delete this driver's account? This can't be undone."
+        vehicles={vehicles}
       />
       <VehiclesCard orgId={orgId} vehicles={vehicles} />
       <DevicesCard orgId={orgId} devices={devices} vehicles={vehicles} />

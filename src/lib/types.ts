@@ -27,6 +27,7 @@ export interface Profile {
   role: Role;
   full_name: string | null;
   phone: string | null;
+  vehicle_id: string | null;
   created_at: string;
 }
 

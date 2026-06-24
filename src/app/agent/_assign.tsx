@@ -7,7 +7,11 @@ import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import Spinner from "@/components/Spinner";
 import { Avatar, MapPin, Flag, Package, Check, Search, Truck } from "@/components/icons";
 
-export type DriverOption = { id: string; full_name: string | null };
+export type DriverOption = {
+  id: string;
+  full_name: string | null;
+  vehicle_id: string | null;
+};
 export type VehicleOption = { id: string; plate: string | null; name: string | null };
 
 const DONE = new Set(["delivered", "cancelled"]);
@@ -345,7 +349,9 @@ function DeliveryRow({
             onChange={(e) => {
               const v = e.target.value;
               setSelected(v);
-              if (!v) setVehicle(""); // no driver → no vehicle
+              // Auto-fill the driver's assigned vehicle (still overridable).
+              const drv = drivers.find((d) => d.id === v);
+              setVehicle(v ? (drv?.vehicle_id ?? "") : "");
             }}
             disabled={busy}
             className="ct-input sm:flex-1"

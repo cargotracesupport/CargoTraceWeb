@@ -4,11 +4,29 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
+/** Returns the vehicle id only if it belongs to the org, else null. */
+async function orgVehicleId(
+  admin: ReturnType<typeof createAdminClient>,
+  orgId: string,
+  raw: unknown,
+): Promise<string | null> {
+  const id = raw ? String(raw) : "";
+  if (!id) return null;
+  const { data } = await admin
+    .from("vehicles")
+    .select("id")
+    .eq("id", id)
+    .eq("org_id", orgId)
+    .maybeSingle();
+  return data ? id : null;
+}
+
 /**
  * Admin or agent: create a driver login inside the caller's org.
  * Drivers don't self-register — the sender (admin) or a dispatcher (agent)
- * provisions them.
- * POST { fullName, email, password, phone? }
+ * provisions them. An optional vehicleId sets the driver's current vehicle
+ * (auto-filled at dispatch).
+ * POST { fullName, email, password, phone?, vehicleId? }
  */
 export async function POST(req: Request) {
   const session = await getSessionProfile();
@@ -58,9 +76,21 @@ export async function POST(req: Request) {
     .eq("id", created.user.id)
     .single();
 
+  const vehicle_id = await orgVehicleId(
+    admin,
+    session.profile.org_id,
+    body.vehicleId,
+  );
+
   const { error: profErr } = await admin
     .from("profiles")
-    .update({ org_id: session.profile.org_id, role: "driver", full_name: fullName, phone })
+    .update({
+      org_id: session.profile.org_id,
+      role: "driver",
+      full_name: fullName,
+      phone,
+      vehicle_id,
+    })
     .eq("id", created.user.id);
 
   if (profErr) {
@@ -78,14 +108,16 @@ export async function POST(req: Request) {
 }
 
 /**
- * Admin or agent: edit a driver's details (name, phone) in the caller's org.
- * Org-wide by design — like the admin Fleet card, an agent may edit any driver
- * in their own org (verified below), not only ones tied to their deliveries.
- * SECURITY: only full_name + phone are ever written here. Do NOT add role,
- * org_id, or email to this update — the service-role client bypasses RLS and
- * the prevent_self_privilege_change trigger, so this allow-list is the only
- * guard against privilege escalation. Email is the login and stays immutable.
- * PATCH { id, fullName, phone? }
+ * Admin or agent: edit a driver's details (name, phone, vehicle) in the caller's
+ * org. Org-wide by design — like the admin Fleet card, an agent may edit any
+ * driver in their own org (verified below), not only ones tied to their
+ * deliveries.
+ * SECURITY: only full_name + phone + vehicle_id are ever written here. Do NOT
+ * add role, org_id, or email to this update — the service-role client bypasses
+ * RLS and the prevent_self_privilege_change trigger, so this allow-list is the
+ * only guard against privilege escalation. Email is the login and stays
+ * immutable. vehicle_id is only touched when the request includes vehicleId.
+ * PATCH { id, fullName, phone?, vehicleId? }
  */
 export async function PATCH(req: Request) {
   const session = await getSessionProfile();
@@ -127,10 +159,18 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const { error } = await admin
-    .from("profiles")
-    .update({ full_name: fullName, phone })
-    .eq("id", id);
+  const update: Record<string, unknown> = { full_name: fullName, phone };
+  // Only touch the vehicle when the caller explicitly sends it (so name/phone
+  // edits don't wipe the assigned vehicle).
+  if ("vehicleId" in body) {
+    update.vehicle_id = await orgVehicleId(
+      admin,
+      session.profile.org_id,
+      body.vehicleId,
+    );
+  }
+
+  const { error } = await admin.from("profiles").update(update).eq("id", id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }

@@ -4,12 +4,22 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import Spinner from "@/components/Spinner";
-import { Plus, Trash, Pencil } from "@/components/icons";
+import { Plus, Trash, Pencil, Truck } from "@/components/icons";
+
+export type VehicleLite = {
+  id: string;
+  plate: string | null;
+  name: string | null;
+};
+
+const vehLabel = (v: VehicleLite) => v.plate ?? v.name ?? "Vehicle";
 
 /**
  * Create / list / delete card for people accounts (drivers, agents). Both are
  * provisioned the same way (POST/DELETE { fullName, email, password, phone? }),
- * so they share this card — only the endpoint + labels differ.
+ * so they share this card — only the endpoint + labels differ. When `vehicles`
+ * is passed (drivers), a vehicle picker is shown so the person can be given a
+ * current vehicle that auto-fills at dispatch.
  */
 export function PeopleCard({
   title,
@@ -21,6 +31,7 @@ export function PeopleCard({
   createLabel,
   emptyLabel,
   deleteConfirm,
+  vehicles,
 }: {
   title: string;
   people: Profile[];
@@ -31,6 +42,7 @@ export function PeopleCard({
   createLabel: string;
   emptyLabel: string;
   deleteConfirm: string;
+  vehicles?: VehicleLite[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -41,6 +53,7 @@ export function PeopleCard({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
+  const [vehicleId, setVehicleId] = useState("");
 
   const noun = title.toLowerCase().replace(/s$/, "");
 
@@ -57,6 +70,7 @@ export function PeopleCard({
           email: email.trim(),
           password,
           phone: phone.trim() || undefined,
+          ...(vehicles ? { vehicleId: vehicleId || undefined } : {}),
         }),
       });
       if (!res.ok) {
@@ -69,6 +83,7 @@ export function PeopleCard({
       setEmail("");
       setPassword("");
       setPhone("");
+      setVehicleId("");
       setOpen(false);
       router.refresh();
     } catch (err) {
@@ -151,6 +166,26 @@ export function PeopleCard({
               className="ct-input"
             />
           </div>
+          {vehicles ? (
+            <div>
+              <label className="ct-label" htmlFor={`${idPrefix}_vehicle`}>
+                Vehicle (optional)
+              </label>
+              <select
+                id={`${idPrefix}_vehicle`}
+                value={vehicleId}
+                onChange={(e) => setVehicleId(e.target.value)}
+                className="ct-input"
+              >
+                <option value="">No vehicle</option>
+                {vehicles.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {vehLabel(v)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
 
           {error ? <FormError message={error} /> : null}
 
@@ -177,6 +212,7 @@ export function PeopleCard({
               endpoint={endpoint}
               noun={noun}
               deleteConfirm={deleteConfirm}
+              vehicles={vehicles}
             />
           ))}
         </ul>
@@ -190,11 +226,13 @@ function PersonRow({
   endpoint,
   noun,
   deleteConfirm,
+  vehicles,
 }: {
   person: Profile;
   endpoint: string;
   noun: string;
   deleteConfirm: string;
+  vehicles?: VehicleLite[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -202,10 +240,14 @@ function PersonRow({
   const [error, setError] = useState<string | null>(null);
   const [fullName, setFullName] = useState(person.full_name ?? "");
   const [phone, setPhone] = useState(person.phone ?? "");
+  const [vehicleId, setVehicleId] = useState(person.vehicle_id ?? "");
+
+  const currentVehicle = vehicles?.find((v) => v.id === person.vehicle_id);
 
   function reset() {
     setFullName(person.full_name ?? "");
     setPhone(person.phone ?? "");
+    setVehicleId(person.vehicle_id ?? "");
     setError(null);
   }
 
@@ -221,6 +263,7 @@ function PersonRow({
           id: person.id,
           fullName: fullName.trim(),
           phone: phone.trim() || undefined,
+          ...(vehicles ? { vehicleId } : {}),
         }),
       });
       if (!res.ok) {
@@ -257,6 +300,21 @@ function PersonRow({
             className="ct-input"
             aria-label="Phone"
           />
+          {vehicles ? (
+            <select
+              value={vehicleId}
+              onChange={(e) => setVehicleId(e.target.value)}
+              className="ct-input"
+              aria-label="Vehicle"
+            >
+              <option value="">No vehicle</option>
+              {vehicles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {vehLabel(v)}
+                </option>
+              ))}
+            </select>
+          ) : null}
           {error ? <FormError message={error} /> : null}
           <div className="flex gap-2">
             <button
@@ -299,6 +357,11 @@ function PersonRow({
         ) : (
           <p className="text-xs text-muted">No phone</p>
         )}
+        {currentVehicle ? (
+          <p className="mt-0.5 inline-flex items-center gap-1 font-mono text-xs text-muted2">
+            <Truck className="h-3.5 w-3.5" /> {vehLabel(currentVehicle)}
+          </p>
+        ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <button

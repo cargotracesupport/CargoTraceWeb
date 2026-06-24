@@ -17,7 +17,7 @@ export default async function AgentPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, vehicle_id")
       .eq("role", "driver")
       .order("full_name", { ascending: true }),
     supabase

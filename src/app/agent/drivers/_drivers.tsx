@@ -1,12 +1,18 @@
 "use client";
 
-import type { Profile } from "@/lib/types";
+import type { Profile, Vehicle } from "@/lib/types";
 import { PeopleCard } from "@/components/people";
 import { Users } from "@/components/icons";
 
 // Client wrapper so the PeopleCard icon (a component) stays client-side —
 // a Server Component can't pass a function/component prop across the boundary.
-export default function DriversManager({ drivers }: { drivers: Profile[] }) {
+export default function DriversManager({
+  drivers,
+  vehicles,
+}: {
+  drivers: Profile[];
+  vehicles: Vehicle[];
+}) {
   return (
     <PeopleCard
       title="Drivers"
@@ -18,6 +24,7 @@ export default function DriversManager({ drivers }: { drivers: Profile[] }) {
       createLabel="Create driver"
       emptyLabel="No drivers yet. Add one so you can assign deliveries to them."
       deleteConfirm="Delete this driver's account? This can't be undone."
+      vehicles={vehicles}
     />
   );
 }
