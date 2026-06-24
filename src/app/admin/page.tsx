@@ -20,6 +20,19 @@ export default async function AdminDashboardPage() {
   const activeDeliveries = (active ?? []) as DeliveryRow[];
   const rows = (all ?? []) as Pick<Delivery, "status" | "delivered_at">[];
 
+  // Team & fleet counts (org-scoped by RLS).
+  const [driversC, vehiclesC, agentsC] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "driver"),
+    supabase.from("vehicles").select("id", { count: "exact", head: true }),
+    supabase
+      .from("profiles")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "agent"),
+  ]);
+
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
 
@@ -33,6 +46,9 @@ export default async function AdminDashboardPage() {
         new Date(r.delivered_at) >= startOfToday,
     ).length,
     total: rows.length,
+    drivers: driversC.count ?? 0,
+    vehicles: vehiclesC.count ?? 0,
+    agents: agentsC.count ?? 0,
   };
 
   return <Dashboard initial={activeDeliveries} counts={counts} />;

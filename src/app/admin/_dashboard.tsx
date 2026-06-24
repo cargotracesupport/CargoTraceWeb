@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Delivery } from "@/lib/types";
@@ -13,6 +14,8 @@ import {
   ArrowLeft,
   MapPin,
   Flag,
+  Users,
+  UserCog,
 } from "@/components/icons";
 import { estimateEtaMinutes, formatEta } from "@/lib/eta";
 
@@ -26,6 +29,9 @@ interface Counts {
   assigned: number;
   deliveredToday: number;
   total: number;
+  drivers: number;
+  vehicles: number;
+  agents: number;
 }
 
 const ACTIVE: Delivery["status"][] = ["assigned", "en_route"];
@@ -181,6 +187,29 @@ export default function Dashboard({
               {t.value}
             </p>
           </div>
+        ))}
+      </div>
+
+      {/* Team & fleet counts (tap to manage) */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: "Drivers", value: counts.drivers, Icon: Users, href: "/admin/fleet" },
+          { label: "Vehicles", value: counts.vehicles, Icon: Truck, href: "/admin/fleet" },
+          { label: "Agents", value: counts.agents, Icon: UserCog, href: "/admin/agents" },
+        ].map((t) => (
+          <Link
+            key={t.label}
+            href={t.href}
+            className="ct-card flex items-center justify-between gap-2 p-4 transition-colors hover:border-primary/40"
+          >
+            <div className="min-w-0">
+              <p className="ct-label mb-0">{t.label}</p>
+              <p className="font-mono text-2xl font-semibold tabular-nums text-text">
+                {t.value}
+              </p>
+            </div>
+            <t.Icon className="h-5 w-5 shrink-0 text-primary opacity-80" />
+          </Link>
         ))}
       </div>
 
