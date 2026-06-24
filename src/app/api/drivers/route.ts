@@ -5,13 +5,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 
 /**
- * Admin-only: create a driver login inside the admin's org.
- * Drivers don't self-register — the sender provisions them.
+ * Admin or agent: create a driver login inside the caller's org.
+ * Drivers don't self-register — the sender (admin) or a dispatcher (agent)
+ * provisions them.
  * POST { fullName, email, password, phone? }
  */
 export async function POST(req: Request) {
   const session = await getSessionProfile();
-  if (!session || session.profile.role !== "admin") {
+  if (!session || !["admin", "agent"].includes(session.profile.role)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
@@ -77,13 +78,13 @@ export async function POST(req: Request) {
 }
 
 /**
- * Admin-only: delete a driver (and their login). DELETE /api/drivers?id=<profileId>
+ * Admin or agent: delete a driver (and their login). DELETE /api/drivers?id=<profileId>
  * Verifies the target is a driver in the caller's org before removing the auth user
  * (the profile row cascades; assigned deliveries keep their history with driver_id set null).
  */
 export async function DELETE(req: Request) {
   const session = await getSessionProfile();
-  if (!session || session.profile.role !== "admin") {
+  if (!session || !["admin", "agent"].includes(session.profile.role)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 

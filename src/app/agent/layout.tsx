@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { BrandMark, Wordmark, LogOut, LiveDot } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
+import AgentNav from "./_nav";
 
 export default async function AgentLayout({
   children,
@@ -37,6 +38,10 @@ export default async function AgentLayout({
           </div>
         </div>
       </header>
+
+      <div className="border-b border-border bg-s1/60 backdrop-blur">
+        <AgentNav />
+      </div>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-4">{children}</main>
     </div>

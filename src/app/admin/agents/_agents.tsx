@@ -1,7 +1,7 @@
 "use client";
 
 import type { Profile } from "@/lib/types";
-import { PeopleCard } from "../_people";
+import { PeopleCard } from "@/components/people";
 import { UserCog } from "@/components/icons";
 
 // Client wrapper so the PeopleCard icon (a component) stays on the client side —

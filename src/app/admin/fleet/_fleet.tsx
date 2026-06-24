@@ -7,7 +7,7 @@ import type { Profile, Vehicle, Device } from "@/lib/types";
 import Spinner from "@/components/Spinner";
 import DeleteButton from "@/components/DeleteButton";
 import { Truck, Package, Users } from "@/components/icons";
-import { PeopleCard, CardHeader, EmptyState, FormError } from "../_people";
+import { PeopleCard, CardHeader, EmptyState, FormError } from "@/components/people";
 
 export default function Fleet({
   orgId,
