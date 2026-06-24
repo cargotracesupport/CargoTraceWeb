@@ -1,7 +1,8 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { BrandMark, Wordmark, LogOut, LiveDot } from "@/components/icons";
+import { BrandMark, Wordmark, LiveDot } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
+import LogoutButton from "@/components/LogoutButton";
 import AgentNav from "./_nav";
 import NewOrderAlert from "./_alert";
 
@@ -40,12 +41,7 @@ export default async function AgentLayout({
             <span className="hidden max-w-[40vw] truncate text-sm text-muted2 sm:inline">
               {session.profile.full_name}
             </span>
-            <form action="/api/auth/signout" method="post">
-              <button type="submit" className="ct-btn-ghost px-3 py-1.5 text-xs">
-                <LogOut className="h-3.5 w-3.5" />
-                Logout
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         </div>
       </header>

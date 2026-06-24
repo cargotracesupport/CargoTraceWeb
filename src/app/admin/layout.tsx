@@ -1,7 +1,8 @@
 import { requireRole } from "@/lib/auth";
 import AdminNav from "./_nav";
-import { BrandMark, Wordmark, LiveDot, LogOut, Avatar } from "@/components/icons";
+import { BrandMark, Wordmark, LiveDot, Avatar } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
+import LogoutButton from "@/components/LogoutButton";
 
 export default async function AdminLayout({
   children,
@@ -30,12 +31,7 @@ export default async function AdminLayout({
               {session.profile.full_name}
             </span>
             <Avatar name={session.profile.full_name ?? "?"} size={30} />
-            <form action="/api/auth/signout" method="post">
-              <button type="submit" className="ct-btn-ghost px-3 py-1.5 text-xs">
-                <LogOut className="h-3.5 w-3.5" />
-                Logout
-              </button>
-            </form>
+            <LogoutButton />
           </div>
         </div>
       </header>

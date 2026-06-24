@@ -175,24 +175,6 @@ export default function AssignConsole({
       ) : (
         <>
           <Section
-            title="Needs a driver"
-            count={needsDriver.length}
-            empty="Nothing waiting — every active delivery has a driver."
-          >
-            {needsDriver.map((d) => (
-              <DeliveryRow
-                key={d.id}
-                delivery={d}
-                drivers={drivers}
-                vehicles={vehicles}
-                driverName={driverName}
-                vehicleLabel={vehicleLabel}
-                onAssigned={patchRow}
-              />
-            ))}
-          </Section>
-
-          <Section
             title="Assigned & en route"
             count={active.length}
             empty="No deliveries are out with a driver right now."
