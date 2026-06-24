@@ -7,23 +7,17 @@ export default async function FleetPage() {
   const session = await requireRole("admin");
   const supabase = createClient();
 
-  const [driversRes, agentsRes, vehiclesRes, devicesRes] = await Promise.all([
+  const [driversRes, vehiclesRes, devicesRes] = await Promise.all([
     supabase
       .from("profiles")
       .select("*")
       .eq("role", "driver")
-      .order("full_name", { ascending: true }),
-    supabase
-      .from("profiles")
-      .select("*")
-      .eq("role", "agent")
       .order("full_name", { ascending: true }),
     supabase.from("vehicles").select("*").order("name", { ascending: true }),
     supabase.from("devices").select("*").order("label", { ascending: true }),
   ]);
 
   const drivers = (driversRes.data ?? []) as Profile[];
-  const agents = (agentsRes.data ?? []) as Profile[];
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
   const devices = (devicesRes.data ?? []) as Device[];
 
@@ -32,15 +26,13 @@ export default async function FleetPage() {
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Fleet</h1>
         <p className="text-sm text-muted2">
-          Manage drivers, dispatch agents, vehicles and GPS devices for your
-          organization.
+          Manage drivers, vehicles and GPS devices for your organization.
         </p>
       </div>
 
       <Fleet
         orgId={session.profile.org_id}
         drivers={drivers}
-        agents={agents}
         vehicles={vehicles}
         devices={devices}
       />

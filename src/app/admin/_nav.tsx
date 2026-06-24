@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dashboard, Package, Truck } from "@/components/icons";
+import { Dashboard, Package, Truck, UserCog } from "@/components/icons";
 
 const LINKS = [
   { href: "/admin", label: "Dashboard", exact: true, Icon: Dashboard },
   { href: "/admin/deliveries", label: "Deliveries", exact: false, Icon: Package },
+  { href: "/admin/agents", label: "Agents", exact: false, Icon: UserCog },
   { href: "/admin/fleet", label: "Fleet", exact: false, Icon: Truck },
 ];
 
