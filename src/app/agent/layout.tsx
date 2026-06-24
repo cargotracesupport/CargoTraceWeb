@@ -1,7 +1,9 @@
 import { requireRole } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { BrandMark, Wordmark, LogOut, LiveDot } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
 import AgentNav from "./_nav";
+import NewOrderAlert from "./_alert";
 
 export default async function AgentLayout({
   children,
@@ -9,6 +11,15 @@ export default async function AgentLayout({
   children: React.ReactNode;
 }) {
   const session = await requireRole("agent");
+  const supabase = createClient();
+
+  // Orders waiting for a driver — shown as a badge on the Unassigned tab.
+  const { count } = await supabase
+    .from("deliveries")
+    .select("id", { count: "exact", head: true })
+    .is("driver_id", null)
+    .not("status", "in", "(delivered,cancelled)");
+  const unassignedCount = count ?? 0;
 
   return (
     <div className="flex min-h-screen flex-col bg-bg text-text">
@@ -41,7 +52,7 @@ export default async function AgentLayout({
 
       {/* Desktop: nav row under the header */}
       <div className="hidden border-b border-border bg-s1/60 backdrop-blur md:block">
-        <AgentNav variant="top" />
+        <AgentNav variant="top" unassignedCount={unassignedCount} />
       </div>
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-24 md:pb-4">
@@ -53,8 +64,11 @@ export default async function AgentLayout({
         className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-s1/95 backdrop-blur md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <AgentNav variant="bottom" />
+        <AgentNav variant="bottom" unassignedCount={unassignedCount} />
       </div>
+
+      {/* New-order chime + toast (fires on any agent page) */}
+      <NewOrderAlert orgId={session.profile.org_id} />
     </div>
   );
 }

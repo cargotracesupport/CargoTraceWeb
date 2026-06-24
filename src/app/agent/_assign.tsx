@@ -18,11 +18,14 @@ export default function AssignConsole({
   initialDeliveries,
   drivers,
   vehicles,
+  mode = "all",
 }: {
   initialDeliveries: Delivery[];
   drivers: DriverOption[];
   vehicles: VehicleOption[];
+  mode?: "all" | "unassigned";
 }) {
+  const unassignedOnly = mode === "unassigned";
   const [rows, setRows] = useState<Delivery[]>(initialDeliveries);
   const [query, setQuery] = useState("");
 
@@ -109,19 +112,25 @@ export default function AssignConsole({
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight">Dispatch board</h1>
+        <h1 className="text-lg font-semibold tracking-tight">
+          {unassignedOnly ? "Unassigned orders" : "Dispatch board"}
+        </h1>
         <p className="text-sm text-muted2">
-          Assign each delivery to a driver. Updates appear live as drivers move.
+          {unassignedOnly
+            ? "Orders waiting for a driver. Assign a driver and vehicle to each."
+            : "Assign each delivery to a driver. Updates appear live as drivers move."}
         </p>
       </div>
 
       {/* Stat tiles */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Unassigned" value={counts.unassigned} tone="amber" />
-        <Stat label="Assigned" value={counts.assigned} tone="blue" />
-        <Stat label="En route" value={counts.enRoute} tone="green" />
-        <Stat label="Completed" value={counts.completed} tone="muted" />
-      </div>
+      {!unassignedOnly && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Stat label="Unassigned" value={counts.unassigned} tone="amber" />
+          <Stat label="Assigned" value={counts.assigned} tone="blue" />
+          <Stat label="En route" value={counts.enRoute} tone="green" />
+          <Stat label="Completed" value={counts.completed} tone="muted" />
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative">
@@ -134,7 +143,25 @@ export default function AssignConsole({
         />
       </div>
 
-      {rows.length === 0 ? (
+      {unassignedOnly ? (
+        <Section
+          title="Needs a driver & vehicle"
+          count={needsDriver.length}
+          empty="No unassigned orders — every active delivery has a driver."
+        >
+          {needsDriver.map((d) => (
+            <DeliveryRow
+              key={d.id}
+              delivery={d}
+              drivers={drivers}
+              vehicles={vehicles}
+              driverName={driverName}
+              vehicleLabel={vehicleLabel}
+              onAssigned={patchRow}
+            />
+          ))}
+        </Section>
+      ) : rows.length === 0 ? (
         <div className="ct-card flex flex-col items-center gap-2 px-5 py-16 text-center">
           <Package className="h-6 w-6 text-muted2" />
           <p className="text-sm text-muted2">
