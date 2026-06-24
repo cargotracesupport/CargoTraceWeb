@@ -62,6 +62,15 @@ export const Users = (p: IconProps) => (
   </Svg>
 );
 
+export const UserCog = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="9" cy="8" r="3.2" />
+    <path d="M3.5 20a5.6 5.6 0 0 1 9.2-2.6" />
+    <circle cx="18" cy="17" r="2.3" />
+    <path d="M18 13.6v-1.1M18 21.5v-1.1M21.2 15.2l-1 .55M15.8 18.25l-1 .55M21.2 18.8l-1-.55M15.8 15.75l-1-.55" />
+  </Svg>
+);
+
 export const MapPin = (p: IconProps) => (
   <Svg {...p}>
     <path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10Z" />

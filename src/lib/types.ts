@@ -1,6 +1,12 @@
 // Canonical app types — mirror of the DB schema (supabase/migrations/0001_init.sql).
 
-export type Role = "admin" | "driver";
+export type Role = "admin" | "driver" | "agent";
+
+export const ROLE_LABEL: Record<Role, string> = {
+  admin: "Admin",
+  driver: "Driver",
+  agent: "Agent",
+};
 
 export type DeliveryStatus =
   | "pending"

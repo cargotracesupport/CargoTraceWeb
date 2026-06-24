@@ -48,7 +48,13 @@ export default function LoginPage() {
           .select("role")
           .eq("id", userId)
           .single();
-        if (profile?.role) dest = profile.role === "admin" ? "/admin" : "/driver";
+        if (profile?.role)
+          dest =
+            profile.role === "admin"
+              ? "/admin"
+              : profile.role === "agent"
+                ? "/agent"
+                : "/driver";
       }
 
       // Full navigation so the auth cookie is sent. Keep `loading` true through

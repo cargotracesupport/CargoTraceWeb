@@ -29,12 +29,19 @@ export async function requireRole(role?: Role) {
   const session = await getSessionProfile();
   if (!session) redirect("/login");
   if (role && session.profile.role !== role) {
-    redirect(session.profile.role === "admin" ? "/admin" : "/driver");
+    redirect(homePathForRole(session.profile.role));
   }
   return session;
 }
 
 /** Where to send a user after login, based on role. */
 export function homePathForRole(role: Role): string {
-  return role === "admin" ? "/admin" : "/driver";
+  switch (role) {
+    case "admin":
+      return "/admin";
+    case "agent":
+      return "/agent";
+    default:
+      return "/driver";
+  }
 }

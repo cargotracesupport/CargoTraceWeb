@@ -6,31 +6,74 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile, Vehicle, Device } from "@/lib/types";
 import Spinner from "@/components/Spinner";
 import DeleteButton from "@/components/DeleteButton";
-import { Plus, Trash, Users, Truck, Package } from "@/components/icons";
+import { Plus, Trash, Users, UserCog, Truck, Package } from "@/components/icons";
 
 export default function Fleet({
   orgId,
   drivers,
+  agents,
   vehicles,
   devices,
 }: {
   orgId: string;
   drivers: Profile[];
+  agents: Profile[];
   vehicles: Vehicle[];
   devices: Device[];
 }) {
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <DriversCard drivers={drivers} />
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <PeopleCard
+        title="Drivers"
+        people={drivers}
+        endpoint="/api/drivers"
+        Icon={Users}
+        idPrefix="driver"
+        namePlaceholder="Juan Santos"
+        createLabel="Create driver"
+        emptyLabel="No drivers yet. Add one to start assigning deliveries."
+        deleteConfirm="Delete this driver's account? This can't be undone."
+      />
+      <PeopleCard
+        title="Agents"
+        people={agents}
+        endpoint="/api/agents"
+        Icon={UserCog}
+        idPrefix="agent"
+        namePlaceholder="Dispatch coordinator"
+        createLabel="Create agent"
+        emptyLabel="No agents yet. Agents log in to assign deliveries to your drivers."
+        deleteConfirm="Delete this agent's account? This can't be undone."
+      />
       <VehiclesCard orgId={orgId} vehicles={vehicles} />
       <DevicesCard orgId={orgId} devices={devices} vehicles={vehicles} />
     </div>
   );
 }
 
-/* ── Drivers ──────────────────────────────────────────────────────────── */
+/* ── People (drivers & agents share the same create/delete shape) ─────── */
 
-function DriversCard({ drivers }: { drivers: Profile[] }) {
+function PeopleCard({
+  title,
+  people,
+  endpoint,
+  Icon,
+  idPrefix,
+  namePlaceholder,
+  createLabel,
+  emptyLabel,
+  deleteConfirm,
+}: {
+  title: string;
+  people: Profile[];
+  endpoint: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  idPrefix: string;
+  namePlaceholder: string;
+  createLabel: string;
+  emptyLabel: string;
+  deleteConfirm: string;
+}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -41,12 +84,14 @@ function DriversCard({ drivers }: { drivers: Profile[] }) {
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
 
-  async function addDriver(e: React.FormEvent) {
+  const noun = title.toLowerCase().replace(/s$/, "");
+
+  async function addPerson(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      const res = await fetch("/api/drivers", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -69,7 +114,7 @@ function DriversCard({ drivers }: { drivers: Profile[] }) {
       setOpen(false);
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add driver.");
+      setError(err instanceof Error ? err.message : `Could not add ${noun}.`);
     } finally {
       setBusy(false);
     }
@@ -78,9 +123,9 @@ function DriversCard({ drivers }: { drivers: Profile[] }) {
   return (
     <section className="ct-card flex flex-col">
       <CardHeader
-        title="Drivers"
-        Icon={Users}
-        count={drivers.length}
+        title={title}
+        Icon={Icon}
+        count={people.length}
         open={open}
         onToggle={() => {
           setOpen((v) => !v);
@@ -90,42 +135,42 @@ function DriversCard({ drivers }: { drivers: Profile[] }) {
 
       {open ? (
         <form
-          onSubmit={addDriver}
+          onSubmit={addPerson}
           className="flex flex-col gap-3 border-b border-border p-4"
         >
           <div>
-            <label className="ct-label" htmlFor="driver_name">
+            <label className="ct-label" htmlFor={`${idPrefix}_name`}>
               Full name
             </label>
             <input
-              id="driver_name"
+              id={`${idPrefix}_name`}
               required
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder="Juan Santos"
+              placeholder={namePlaceholder}
               className="ct-input"
             />
           </div>
           <div>
-            <label className="ct-label" htmlFor="driver_email">
+            <label className="ct-label" htmlFor={`${idPrefix}_email`}>
               Email
             </label>
             <input
-              id="driver_email"
+              id={`${idPrefix}_email`}
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="driver@example.com"
+              placeholder="name@example.com"
               className="ct-input"
             />
           </div>
           <div>
-            <label className="ct-label" htmlFor="driver_password">
+            <label className="ct-label" htmlFor={`${idPrefix}_password`}>
               Temporary password
             </label>
             <input
-              id="driver_password"
+              id={`${idPrefix}_password`}
               type="text"
               required
               minLength={6}
@@ -136,11 +181,11 @@ function DriversCard({ drivers }: { drivers: Profile[] }) {
             />
           </div>
           <div>
-            <label className="ct-label" htmlFor="driver_phone">
+            <label className="ct-label" htmlFor={`${idPrefix}_phone`}>
               Phone (optional)
             </label>
             <input
-              id="driver_phone"
+              id={`${idPrefix}_phone`}
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -157,32 +202,36 @@ function DriversCard({ drivers }: { drivers: Profile[] }) {
                 <Spinner /> Adding…
               </>
             ) : (
-              "Create driver"
+              createLabel
             )}
           </button>
         </form>
       ) : null}
 
-      {drivers.length === 0 ? (
-        <EmptyState label="No drivers yet. Add one to start assigning deliveries." />
+      {people.length === 0 ? (
+        <EmptyState label={emptyLabel} />
       ) : (
         <ul className="divide-y divide-border">
-          {drivers.map((d) => (
+          {people.map((p) => (
             <li
-              key={d.id}
+              key={p.id}
               className="flex items-start justify-between gap-2 px-4 py-3"
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium text-text">
-                  {d.full_name ?? "Unnamed driver"}
+                  {p.full_name ?? `Unnamed ${noun}`}
                 </p>
-                {d.phone ? (
-                  <p className="font-mono text-xs text-muted2">{d.phone}</p>
+                {p.phone ? (
+                  <p className="font-mono text-xs text-muted2">{p.phone}</p>
                 ) : (
                   <p className="text-xs text-muted">No phone</p>
                 )}
               </div>
-              <DeleteDriverButton id={d.id} />
+              <DeletePersonButton
+                endpoint={endpoint}
+                id={p.id}
+                confirmText={deleteConfirm}
+              />
             </li>
           ))}
         </ul>
@@ -479,16 +528,23 @@ function DevicesCard({
 
 /* ── Shared bits ──────────────────────────────────────────────────────── */
 
-function DeleteDriverButton({ id }: { id: string }) {
+function DeletePersonButton({
+  endpoint,
+  id,
+  confirmText,
+}: {
+  endpoint: string;
+  id: string;
+  confirmText: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   async function onClick() {
-    if (!window.confirm("Delete this driver's account? This can't be undone."))
-      return;
+    if (!window.confirm(confirmText)) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/drivers?id=${encodeURIComponent(id)}`, {
+      const res = await fetch(`${endpoint}?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
       if (!res.ok) {
@@ -499,7 +555,7 @@ function DeleteDriverButton({ id }: { id: string }) {
       }
       router.refresh();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Could not delete driver.");
+      window.alert(e instanceof Error ? e.message : "Could not delete.");
     } finally {
       setBusy(false);
     }
@@ -510,7 +566,7 @@ function DeleteDriverButton({ id }: { id: string }) {
       type="button"
       onClick={onClick}
       disabled={busy}
-      title="Delete driver"
+      title="Delete"
       className="ct-btn-ghost px-2 py-1 text-xs hover:border-red hover:text-red disabled:opacity-50"
     >
       {busy ? (
