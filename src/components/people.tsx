@@ -57,6 +57,14 @@ export function PeopleCard({
 
   const noun = title.toLowerCase().replace(/s$/, "");
 
+  // A vehicle assigned to a driver shouldn't be offered when adding another one.
+  const assignedIds = new Set(
+    people.map((p) => p.vehicle_id).filter(Boolean) as string[],
+  );
+  const availableVehicles = (vehicles ?? []).filter(
+    (v) => !assignedIds.has(v.id),
+  );
+
   async function addPerson(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -181,15 +189,16 @@ export function PeopleCard({
                 <option value="" disabled>
                   Select a vehicle
                 </option>
-                {vehicles.map((v) => (
+                {availableVehicles.map((v) => (
                   <option key={v.id} value={v.id}>
                     {vehLabel(v)}
                   </option>
                 ))}
               </select>
-              {vehicles.length === 0 ? (
+              {availableVehicles.length === 0 ? (
                 <p className="mt-1 text-xs text-amber">
-                  Add a vehicle first, then you can assign one here.
+                  No unassigned vehicles — add a new vehicle (or free one up)
+                  first.
                 </p>
               ) : null}
             </div>
@@ -221,6 +230,7 @@ export function PeopleCard({
               noun={noun}
               deleteConfirm={deleteConfirm}
               vehicles={vehicles}
+              assignedIds={assignedIds}
             />
           ))}
         </ul>
@@ -235,12 +245,14 @@ function PersonRow({
   noun,
   deleteConfirm,
   vehicles,
+  assignedIds,
 }: {
   person: Profile;
   endpoint: string;
   noun: string;
   deleteConfirm: string;
   vehicles?: VehicleLite[];
+  assignedIds?: Set<string>;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -251,6 +263,10 @@ function PersonRow({
   const [vehicleId, setVehicleId] = useState(person.vehicle_id ?? "");
 
   const currentVehicle = vehicles?.find((v) => v.id === person.vehicle_id);
+  // Offer free vehicles + this driver's own current one.
+  const editVehicles = vehicles?.filter(
+    (v) => !assignedIds?.has(v.id) || v.id === person.vehicle_id,
+  );
 
   function reset() {
     setFullName(person.full_name ?? "");
@@ -313,7 +329,7 @@ function PersonRow({
                 <option value="" disabled>
                   Select a vehicle
                 </option>
-                {vehicles.map((v) => (
+                {(editVehicles ?? []).map((v) => (
                   <option key={v.id} value={v.id}>
                     {vehLabel(v)}
                   </option>
