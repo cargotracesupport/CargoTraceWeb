@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { Profile, Vehicle, Device } from "@/lib/types";
+import type { Profile, Vehicle, Device, Delivery } from "@/lib/types";
 import LocationPicker, { type LatLng } from "@/components/LocationPicker";
 import Spinner from "@/components/Spinner";
 
@@ -44,32 +45,46 @@ export default function NewDeliveryForm({
   drivers,
   vehicles,
   devices,
+  delivery,
 }: {
   orgId: string;
   drivers: Profile[];
   vehicles: Vehicle[];
   devices: Device[];
+  delivery?: Delivery;
 }) {
+  const router = useRouter();
+  const editing = !!delivery;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<Created | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Form state
-  const [reference, setReference] = useState("");
-  const [goods, setGoods] = useState("");
-  const [originLabel, setOriginLabel] = useState("");
-  const [originLat, setOriginLat] = useState("");
-  const [originLng, setOriginLng] = useState("");
-  const [destLabel, setDestLabel] = useState("");
-  const [destLat, setDestLat] = useState("");
-  const [destLng, setDestLng] = useState("");
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
-  const [driverId, setDriverId] = useState("");
-  const [vehicleId, setVehicleId] = useState("");
-  const [deviceId, setDeviceId] = useState("");
+  // Form state (prefilled when editing)
+  const [reference, setReference] = useState(delivery?.reference ?? "");
+  const [goods, setGoods] = useState(delivery?.goods ?? "");
+  const [originLabel, setOriginLabel] = useState(delivery?.origin_label ?? "");
+  const [originLat, setOriginLat] = useState(
+    delivery?.origin_lat?.toString() ?? "",
+  );
+  const [originLng, setOriginLng] = useState(
+    delivery?.origin_lng?.toString() ?? "",
+  );
+  const [destLabel, setDestLabel] = useState(delivery?.dest_label ?? "");
+  const [destLat, setDestLat] = useState(delivery?.dest_lat?.toString() ?? "");
+  const [destLng, setDestLng] = useState(delivery?.dest_lng?.toString() ?? "");
+  const [customerName, setCustomerName] = useState(
+    delivery?.customer_name ?? "",
+  );
+  const [customerPhone, setCustomerPhone] = useState(
+    delivery?.customer_phone ?? "",
+  );
+  const [customerEmail, setCustomerEmail] = useState(
+    delivery?.customer_email ?? "",
+  );
+  const [driverId, setDriverId] = useState(delivery?.driver_id ?? "");
+  const [vehicleId, setVehicleId] = useState(delivery?.vehicle_id ?? "");
+  const [deviceId, setDeviceId] = useState(delivery?.device_id ?? "");
 
   /** When the user pastes "lat,lng" into the lat box, split it across both fields. */
   function handleLatPaste(
@@ -135,24 +150,54 @@ export default function NewDeliveryForm({
 
     setBusy(true);
     const supabase = createClient();
+
+    const fields = {
+      reference: reference.trim() || null,
+      goods: goods.trim() || null,
+      origin_label: originLabel.trim() || null,
+      origin_lat: oLat,
+      origin_lng: oLng,
+      dest_label: destLabel.trim() || null,
+      dest_lat: dLat,
+      dest_lng: dLng,
+      customer_name: customerName.trim() || null,
+      customer_phone: customerPhone.trim() || null,
+      customer_email: customerEmail.trim() || null,
+      driver_id: driverId || null,
+      vehicle_id: vehicleId || null,
+      device_id: deviceId || null,
+    };
+
+    // ── Edit: update in place, then back to the list ──────────────
+    if (editing && delivery) {
+      const patch: Record<string, unknown> = { ...fields };
+      // Only re-derive status while the delivery hasn't started moving.
+      if (delivery.status === "pending" || delivery.status === "assigned") {
+        patch.status = driverId ? "assigned" : "pending";
+        patch.assigned_at = driverId
+          ? (delivery.assigned_at ?? new Date().toISOString())
+          : null;
+      }
+      const { error: err } = await supabase
+        .from("deliveries")
+        .update(patch)
+        .eq("id", delivery.id);
+      setBusy(false);
+      if (err) {
+        setError(err.message);
+        return;
+      }
+      router.push("/admin/deliveries");
+      router.refresh();
+      return;
+    }
+
+    // ── Create ────────────────────────────────────────────────────
     const { data, error: err } = await supabase
       .from("deliveries")
       .insert({
         org_id: orgId,
-        reference: reference.trim() || null,
-        goods: goods.trim() || null,
-        origin_label: originLabel.trim() || null,
-        origin_lat: oLat,
-        origin_lng: oLng,
-        dest_label: destLabel.trim() || null,
-        dest_lat: dLat,
-        dest_lng: dLng,
-        customer_name: customerName.trim() || null,
-        customer_phone: customerPhone.trim() || null,
-        customer_email: customerEmail.trim() || null,
-        driver_id: driverId || null,
-        vehicle_id: vehicleId || null,
-        device_id: deviceId || null,
+        ...fields,
         status: driverId ? "assigned" : "pending",
         assigned_at: driverId ? new Date().toISOString() : null,
       })
@@ -503,8 +548,10 @@ export default function NewDeliveryForm({
         <button type="submit" disabled={busy} className="ct-btn-primary">
           {busy ? (
             <>
-              <Spinner /> Creating…
+              <Spinner /> {editing ? "Saving…" : "Creating…"}
             </>
+          ) : editing ? (
+            "Save changes"
           ) : (
             "Create delivery"
           )}

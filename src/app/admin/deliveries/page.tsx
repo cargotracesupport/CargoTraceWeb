@@ -4,7 +4,7 @@ import type { Delivery } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import SimulateButton from "@/components/SimulateButton";
 import DeleteButton from "@/components/DeleteButton";
-import { Plus } from "@/components/icons";
+import { Plus, Pencil, Locate } from "@/components/icons";
 
 type DeliveryRow = Delivery & {
   driver: { full_name: string | null } | null;
@@ -40,7 +40,7 @@ function Th({
 }) {
   return (
     <th
-      className={`whitespace-nowrap px-4 py-3 text-[11px] font-semibold uppercase tracking-[1.2px] text-muted2 ${className}`}
+      className={`whitespace-nowrap px-3 py-3 text-[11px] font-semibold uppercase tracking-[1.2px] text-muted2 ${className}`}
     >
       {children}
     </th>
@@ -49,12 +49,29 @@ function Th({
 
 function RowActions({ d }: { d: DeliveryRow }) {
   return (
-    <div className="flex items-center justify-end gap-2">
+    <div className="flex items-center justify-end gap-1">
+      <Link
+        href={`/admin/deliveries/${d.id}/edit`}
+        title="Edit delivery"
+        className="ct-btn-ghost px-2 py-1 text-xs"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+        Edit
+      </Link>
+      <Link
+        href={`/track/${d.tracking_token}`}
+        target="_blank"
+        title="Open tracker"
+        className="ct-btn-ghost px-2 py-1 text-xs"
+      >
+        <Locate className="h-3.5 w-3.5" />
+      </Link>
       <SimulateButton deliveryId={d.id} origin={originOf(d)} dest={destOf(d)} />
       <DeleteButton
         table="deliveries"
         id={d.id}
         confirmText="Delete this delivery? This removes its tracking history."
+        label=""
       />
     </div>
   );
@@ -104,14 +121,13 @@ export default async function AdminDeliveriesPage() {
                     <Th>Status</Th>
                     <Th>Driver</Th>
                     <Th>Created</Th>
-                    <Th>Tracking</Th>
                     <Th className="text-right">Actions</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {deliveries.map((d) => (
                     <tr key={d.id} className="transition-colors hover:bg-s2/60">
-                      <td className="px-4 py-3 align-top">
+                      <td className="px-3 py-3 align-top">
                         <p className="font-mono font-medium">
                           {d.reference ?? "—"}
                         </p>
@@ -119,7 +135,7 @@ export default async function AdminDeliveriesPage() {
                           {d.goods}
                         </p>
                       </td>
-                      <td className="px-4 py-3 align-top">
+                      <td className="px-3 py-3 align-top">
                         <div className="flex items-center gap-1.5 text-xs">
                           <span className="max-w-[140px] truncate text-text">
                             {d.origin_label ?? "—"}
@@ -130,30 +146,21 @@ export default async function AdminDeliveriesPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-3 align-top text-muted2">
+                      <td className="px-3 py-3 align-top text-muted2">
                         {d.customer_name ?? "—"}
                       </td>
-                      <td className="px-4 py-3 align-top">
+                      <td className="px-3 py-3 align-top">
                         <DeliveryStatusBadge status={d.status} />
                       </td>
-                      <td className="px-4 py-3 align-top text-muted2">
+                      <td className="px-3 py-3 align-top text-muted2">
                         {d.driver?.full_name ?? (
                           <span className="text-muted">Unassigned</span>
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 align-top font-mono text-xs text-muted">
+                      <td className="whitespace-nowrap px-3 py-3 align-top font-mono text-xs text-muted">
                         {fmtDate(d.created_at)}
                       </td>
-                      <td className="px-4 py-3 align-top">
-                        <Link
-                          href={`/track/${d.tracking_token}`}
-                          target="_blank"
-                          className="font-mono text-xs text-blue hover:underline"
-                        >
-                          /track/{d.tracking_token.slice(0, 8)}…
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 align-top">
+                      <td className="px-3 py-3 align-top">
                         <RowActions d={d} />
                       </td>
                     </tr>
@@ -194,14 +201,7 @@ export default async function AdminDeliveriesPage() {
                   </span>
                 </div>
 
-                <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
-                  <Link
-                    href={`/track/${d.tracking_token}`}
-                    target="_blank"
-                    className="font-mono text-xs text-blue hover:underline"
-                  >
-                    Tracking link
-                  </Link>
+                <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
                   <RowActions d={d} />
                 </div>
               </div>
