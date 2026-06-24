@@ -1,8 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile } from "@/lib/types";
-import { PeopleCard } from "../_people";
-import { UserCog } from "@/components/icons";
+import AgentsManager from "./_agents";
 
 export default async function AgentsPage() {
   await requireRole("admin");
@@ -26,19 +25,7 @@ export default async function AgentsPage() {
         </p>
       </div>
 
-      <div className="max-w-md">
-        <PeopleCard
-          title="Agents"
-          people={agents}
-          endpoint="/api/agents"
-          Icon={UserCog}
-          idPrefix="agent"
-          namePlaceholder="Dispatch coordinator"
-          createLabel="Create agent"
-          emptyLabel="No agents yet. Agents log in to assign deliveries to your drivers."
-          deleteConfirm="Delete this agent's account? This can't be undone."
-        />
-      </div>
+      <AgentsManager agents={agents} />
     </div>
   );
 }
