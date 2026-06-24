@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import Spinner from "@/components/Spinner";
-import { Plus, Trash } from "@/components/icons";
+import { Plus, Trash, Pencil } from "@/components/icons";
 
 /**
  * Create / list / delete card for people accounts (drivers, agents). Both are
@@ -171,30 +171,155 @@ export function PeopleCard({
       ) : (
         <ul className="divide-y divide-border">
           {people.map((p) => (
-            <li
+            <PersonRow
               key={p.id}
-              className="flex items-start justify-between gap-2 px-4 py-3"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-text">
-                  {p.full_name ?? `Unnamed ${noun}`}
-                </p>
-                {p.phone ? (
-                  <p className="font-mono text-xs text-muted2">{p.phone}</p>
-                ) : (
-                  <p className="text-xs text-muted">No phone</p>
-                )}
-              </div>
-              <DeletePersonButton
-                endpoint={endpoint}
-                id={p.id}
-                confirmText={deleteConfirm}
-              />
-            </li>
+              person={p}
+              endpoint={endpoint}
+              noun={noun}
+              deleteConfirm={deleteConfirm}
+            />
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+function PersonRow({
+  person,
+  endpoint,
+  noun,
+  deleteConfirm,
+}: {
+  person: Profile;
+  endpoint: string;
+  noun: string;
+  deleteConfirm: string;
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fullName, setFullName] = useState(person.full_name ?? "");
+  const [phone, setPhone] = useState(person.phone ?? "");
+
+  function reset() {
+    setFullName(person.full_name ?? "");
+    setPhone(person.phone ?? "");
+    setError(null);
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch(endpoint, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: person.id,
+          fullName: fullName.trim(),
+          phone: phone.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(j?.error ?? `Failed (${res.status})`);
+      }
+      setEditing(false);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Could not save ${noun}.`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <li className="px-4 py-3">
+        <form onSubmit={save} className="flex flex-col gap-2">
+          <input
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+            placeholder="Full name"
+            className="ct-input"
+            aria-label="Full name"
+          />
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Phone (optional)"
+            className="ct-input"
+            aria-label="Phone"
+          />
+          {error ? <FormError message={error} /> : null}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="ct-btn-primary px-3 py-1.5 text-xs"
+            >
+              {busy ? (
+                <>
+                  <Spinner /> Saving…
+                </>
+              ) : (
+                "Save"
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false);
+                reset();
+              }}
+              className="ct-btn-ghost px-3 py-1.5 text-xs"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-start justify-between gap-2 px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-text">
+          {person.full_name ?? `Unnamed ${noun}`}
+        </p>
+        {person.phone ? (
+          <p className="font-mono text-xs text-muted2">{person.phone}</p>
+        ) : (
+          <p className="text-xs text-muted">No phone</p>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            reset();
+            setEditing(true);
+          }}
+          title={`Edit ${noun}`}
+          className="ct-btn-ghost px-2 py-1 text-xs"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </button>
+        <DeletePersonButton
+          endpoint={endpoint}
+          id={person.id}
+          confirmText={deleteConfirm}
+        />
+      </div>
+    </li>
   );
 }
 

@@ -77,6 +77,63 @@ export async function POST(req: Request) {
 }
 
 /**
+ * Admin-only: edit an agent's details (name, phone) in the admin's org.
+ * SECURITY: only full_name + phone are written here — never role, org_id, or
+ * email. The service-role client bypasses RLS and the privilege trigger, so
+ * this allow-list is the only guard. Email is the login and stays immutable.
+ * PATCH { id, fullName, phone? }
+ */
+export async function PATCH(req: Request) {
+  const session = await getSessionProfile();
+  if (!session || session.profile.role !== "admin") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
+  }
+
+  const id = String(body.id ?? "");
+  const fullName = String(body.fullName ?? "").trim();
+  const phone = body.phone ? String(body.phone).trim() : null;
+  if (!id || !fullName) {
+    return NextResponse.json(
+      { error: "id and fullName required" },
+      { status: 400 },
+    );
+  }
+
+  const admin = createAdminClient();
+
+  const { data: target } = await admin
+    .from("profiles")
+    .select("id, org_id, role")
+    .eq("id", id)
+    .single();
+
+  if (
+    !target ||
+    target.org_id !== session.profile.org_id ||
+    target.role !== "agent"
+  ) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ full_name: fullName, phone })
+    .eq("id", id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+/**
  * Admin-only: delete an agent (and their login). DELETE /api/agents?id=<profileId>
  * Verifies the target is an agent in the caller's org before removing the auth user.
  */
