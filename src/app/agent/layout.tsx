@@ -39,11 +39,22 @@ export default async function AgentLayout({
         </div>
       </header>
 
-      <div className="border-b border-border bg-s1/60 backdrop-blur">
-        <AgentNav />
+      {/* Desktop: nav row under the header */}
+      <div className="hidden border-b border-border bg-s1/60 backdrop-blur md:block">
+        <AgentNav variant="top" />
       </div>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-4">{children}</main>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-4 pb-24 md:pb-4">
+        {children}
+      </main>
+
+      {/* Mobile: fixed bottom tab bar */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-s1/95 backdrop-blur md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <AgentNav variant="bottom" />
+      </div>
     </div>
   );
 }
