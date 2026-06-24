@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { BrandMark, Wordmark, LiveDot } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
+import VehicleGate from "./_gate";
 
 export default async function DriverLayout({
   children,
@@ -10,6 +12,18 @@ export default async function DriverLayout({
   children: React.ReactNode;
 }) {
   const session = await requireRole("driver");
+
+  // The vehicle number the driver must confirm to start their shift.
+  let plate: string | null = null;
+  if (session.profile.vehicle_id) {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("vehicles")
+      .select("plate")
+      .eq("id", session.profile.vehicle_id)
+      .maybeSingle();
+    plate = data?.plate ?? null;
+  }
 
   return (
     <div className="min-h-screen bg-bg text-text flex flex-col">
@@ -38,6 +52,9 @@ export default async function DriverLayout({
       </header>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-4">{children}</main>
+
+      {/* Strict gate: confirm assigned vehicle before any deliveries are usable */}
+      <VehicleGate plate={plate} />
     </div>
   );
 }
