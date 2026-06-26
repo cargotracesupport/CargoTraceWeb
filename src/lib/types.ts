@@ -9,6 +9,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export type DeliveryStatus =
+  | "awaiting_dropoff"
   | "pending"
   | "assigned"
   | "en_route"
@@ -94,6 +95,7 @@ export interface Position {
 }
 
 export const STATUS_LABEL: Record<DeliveryStatus, string> = {
+  awaiting_dropoff: "Awaiting drop-off",
   pending: "Pending",
   assigned: "Assigned",
   en_route: "En route",

@@ -10,6 +10,15 @@ import Spinner from "@/components/Spinner";
 
 interface Created {
   token: string;
+  phone: string;
+  name: string;
+  reference: string;
+}
+
+/** Click-to-chat WhatsApp link prefilled with the message (agent taps to send). */
+function whatsappUrl(phone: string, message: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
 }
 
 function trackUrl(token: string): string {
@@ -193,6 +202,10 @@ export default function NewDeliveryForm({
         patch.assigned_at = driverId
           ? (delivery.assigned_at ?? new Date().toISOString())
           : null;
+      } else if (delivery.status === "awaiting_dropoff") {
+        patch.assigned_at = driverId
+          ? (delivery.assigned_at ?? new Date().toISOString())
+          : null;
       }
       const { error: err } = await supabase
         .from("deliveries")
@@ -214,7 +227,11 @@ export default function NewDeliveryForm({
       .insert({
         org_id: orgId,
         ...fields,
-        status: driverId ? "assigned" : "pending",
+        // No drop-off yet — the customer sets it from their link.
+        dest_label: null,
+        dest_lat: null,
+        dest_lng: null,
+        status: "awaiting_dropoff",
         assigned_at: driverId ? new Date().toISOString() : null,
       })
       .select("tracking_token")
@@ -230,7 +247,12 @@ export default function NewDeliveryForm({
       setError("Delivery created, but could not read back the tracking link.");
       return;
     }
-    setCreated({ token: data.tracking_token as string });
+    setCreated({
+      token: data.tracking_token as string,
+      phone: customerPhone.trim(),
+      name: customerName.trim(),
+      reference: reference.trim(),
+    });
   }
 
   async function copyLink() {
@@ -244,17 +266,31 @@ export default function NewDeliveryForm({
     }
   }
 
-  // Success state — show the shareable tracking link.
+  // Success state — send the drop-off link to the customer on WhatsApp.
   if (created) {
     const url = trackUrl(created.token);
+    const msg =
+      `Hi${created.name ? " " + created.name : ""}, your delivery ${created.reference || ""}`.trim() +
+      ` is booked. Please open this link and set your drop-off location: ${url}`;
+    const wa = whatsappUrl(created.phone, msg);
     return (
       <div className="ct-card flex flex-col gap-4 p-6 text-center">
         <div>
           <div className="text-2xl font-semibold text-green">Delivery created</div>
           <p className="mt-1 text-sm text-muted2">
-            Share this tracking link with the customer — no login required.
+            Send the customer their link so they can set the drop-off location.
           </p>
         </div>
+
+        <a
+          href={wa}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ct-btn-primary w-full !py-3"
+          style={{ backgroundImage: "none", backgroundColor: "#25D366" }}
+        >
+          Send on WhatsApp ({created.phone})
+        </a>
 
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
@@ -266,7 +302,7 @@ export default function NewDeliveryForm({
           <button
             type="button"
             onClick={copyLink}
-            className="ct-btn-primary shrink-0"
+            className="ct-btn-ghost shrink-0"
           >
             {copied ? "Copied ✓" : "Copy link"}
           </button>
@@ -350,16 +386,22 @@ export default function NewDeliveryForm({
         </div>
       </fieldset>
 
-      {/* Pick on map */}
+      {/* Pick the pickup on the map (the customer sets the drop-off later) */}
       <fieldset className="ct-card flex flex-col gap-4 p-5">
         <legend className="px-1 text-sm font-semibold">
-          Pick locations on the map
+          Pickup location on the map
         </legend>
         <LocationPicker
           origin={parsePoint(originLat, originLng)}
-          dest={parsePoint(destLat, destLng)}
+          dest={null}
           onPick={handlePick}
+          mode="origin"
         />
+        <p className="rounded-lg bg-s2 px-3 py-2 text-xs text-muted2">
+          The <span className="font-medium text-text">drop-off location</span> is
+          set by the customer from the link they receive — it can&rsquo;t be
+          entered here.
+        </p>
       </fieldset>
 
       {/* Origin */}
@@ -414,59 +456,6 @@ export default function NewDeliveryForm({
         </p>
       </fieldset>
 
-      {/* Destination */}
-      <fieldset className="ct-card flex flex-col gap-4 p-5">
-        <legend className="px-1 text-sm font-semibold">
-          Destination (drop-off)
-        </legend>
-        <div>
-          <label className="ct-label" htmlFor="dest_label">
-            Label
-          </label>
-          <input
-            id="dest_label"
-            value={destLabel}
-            onChange={(e) => setDestLabel(e.target.value)}
-            placeholder="e.g. 24 Rizal Ave, Quezon City"
-            className="ct-input"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="ct-label" htmlFor="dest_lat">
-              Latitude
-            </label>
-            <input
-              id="dest_lat"
-              inputMode="decimal"
-              value={destLat}
-              onChange={(e) =>
-                handleLatPaste(e.target.value, setDestLat, setDestLng)
-              }
-              placeholder="14.6760"
-              className="ct-input font-mono"
-            />
-          </div>
-          <div>
-            <label className="ct-label" htmlFor="dest_lng">
-              Longitude
-            </label>
-            <input
-              id="dest_lng"
-              inputMode="decimal"
-              value={destLng}
-              onChange={(e) => setDestLng(e.target.value)}
-              placeholder="121.0437"
-              className="ct-input font-mono"
-            />
-          </div>
-        </div>
-        <p className="text-xs text-muted">
-          Tip: paste{" "}
-          <span className="font-mono text-muted2">lat,lng</span> into the latitude
-          box to fill both.
-        </p>
-      </fieldset>
 
       {/* Customer */}
       <fieldset className="ct-card flex flex-col gap-4 p-5">
@@ -486,16 +475,21 @@ export default function NewDeliveryForm({
           </div>
           <div>
             <label className="ct-label" htmlFor="customer_phone">
-              Phone
+              Mobile number *
             </label>
             <input
               id="customer_phone"
               type="tel"
+              required
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
-              placeholder="+63…"
+              placeholder="+91 90000 00000"
               className="ct-input"
             />
+            <p className="mt-1 text-xs text-muted">
+              The drop-off link is sent here, and the customer logs in with this
+              number.
+            </p>
           </div>
           <div>
             <label className="ct-label" htmlFor="customer_email">

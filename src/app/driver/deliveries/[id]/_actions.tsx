@@ -71,6 +71,18 @@ export default function DriverActions({
         <p className="text-center text-sm text-green">This delivery is complete.</p>
       ) : null}
 
+      {status === "awaiting_dropoff" ? (
+        <div className="flex flex-col items-center gap-1 rounded-xl bg-amber/10 px-3 py-3 text-center">
+          <p className="text-sm font-semibold text-amber">
+            Waiting for drop-off location
+          </p>
+          <p className="text-xs text-muted2">
+            The customer hasn&rsquo;t set their drop-off yet. You can start the
+            trip once they do.
+          </p>
+        </div>
+      ) : null}
+
       {status === "pending" ? (
         <p className="text-center text-sm text-muted2">
           Waiting to be assigned a vehicle.

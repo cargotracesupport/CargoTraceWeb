@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
+import DropoffSetter from "@/components/DropoffSetter";
 import { BrandMark, Wordmark, Check, MapPin, Flag } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
 import { estimateEtaMinutes, formatEta } from "@/lib/eta";
@@ -75,6 +76,15 @@ export default function CustomerTracker({
   const isDelivered = status === "delivered";
 
   const hasPosition = delivery.last_lat != null && delivery.last_lng != null;
+  const needsDropoff =
+    !isDelivered &&
+    status !== "cancelled" &&
+    delivery.dest_lat == null &&
+    delivery.dest_lng == null;
+  const originPoint =
+    delivery.origin_lat != null && delivery.origin_lng != null
+      ? { lat: delivery.origin_lat, lng: delivery.origin_lng }
+      : null;
 
   const markers: MapMarker[] = [];
   if (delivery.origin_lat != null && delivery.origin_lng != null) {
@@ -162,13 +172,19 @@ export default function CustomerTracker({
         {/* ETA / status headline */}
         <div className="mx-auto mt-8 w-full max-w-2xl">
           <p className="text-[11px] font-semibold uppercase tracking-[2px] text-white/70">
-            {isDelivered
-              ? "Delivery complete"
-              : hasPosition
-                ? "Arriving in"
-                : "Preparing your delivery"}
+            {needsDropoff
+              ? "Action needed"
+              : isDelivered
+                ? "Delivery complete"
+                : hasPosition
+                  ? "Arriving in"
+                  : "Preparing your delivery"}
           </p>
-          {isDelivered ? (
+          {needsDropoff ? (
+            <div className="mt-1 text-2xl font-bold tracking-tight">
+              Set your drop-off location
+            </div>
+          ) : isDelivered ? (
             <div className="mt-1 flex items-center gap-2 text-4xl font-extrabold tracking-tight">
               <Check className="h-8 w-8" strokeWidth={3} /> Delivered
             </div>
@@ -195,6 +211,10 @@ export default function CustomerTracker({
 
       {/* ── Content (overlaps hero) ───────────────────────────── */}
       <div className="mx-auto -mt-10 flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pb-6">
+        {needsDropoff ? (
+          <DropoffSetter token={token} origin={originPoint} />
+        ) : (
+        <>
         {/* Route + reference */}
         <section className="ct-card p-5" style={{ boxShadow: "var(--ct-shadow-pop)" }}>
           <div className="flex items-center justify-between">
@@ -260,6 +280,8 @@ export default function CustomerTracker({
             )}
           </div>
         </section>
+        </>
+        )}
 
         <p className="pb-2 text-center text-xs text-muted2">
           Live tracking by <Wordmark className="font-semibold" />

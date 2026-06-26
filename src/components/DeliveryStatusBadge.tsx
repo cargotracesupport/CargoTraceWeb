@@ -2,6 +2,7 @@ import type { DeliveryStatus } from "@/lib/types";
 import { STATUS_LABEL } from "@/lib/types";
 
 const STYLES: Record<DeliveryStatus, string> = {
+  awaiting_dropoff: "bg-amber/10 text-amber",
   pending: "bg-muted/10 text-muted2",
   assigned: "bg-blue/10 text-blue",
   en_route: "bg-green/10 text-green",

@@ -27,19 +27,23 @@ export default function LocationPicker({
   origin,
   dest,
   onPick,
+  mode = "both",
 }: {
   origin: LatLng | null;
   dest: LatLng | null;
   onPick: (which: Which, p: { lat: number; lng: number; label?: string }) => void;
+  // "both" = pickup + drop-off; "origin"/"dest" = a single pin.
+  mode?: "both" | "origin" | "dest";
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Partial<Record<Which, maplibregl.Marker>>>({});
-  const activeRef = useRef<Which>("origin");
+  const initial: Which = mode === "dest" ? "dest" : "origin";
+  const activeRef = useRef<Which>(initial);
   const onPickRef = useRef(onPick);
   onPickRef.current = onPick;
 
-  const [active, setActive] = useState<Which>("origin");
+  const [active, setActive] = useState<Which>(initial);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GeoResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -161,22 +165,24 @@ export default function LocationPicker({
   return (
     <div className="flex flex-col gap-3">
       {/* which pin am I placing */}
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => setActive("origin")}
-          className={`ct-btn px-3 py-2 text-xs ${active === "origin" ? "bg-blue/15 text-blue border border-blue/50" : "ct-btn-ghost"}`}
-        >
-          <MapPin className="h-3.5 w-3.5" /> Set pickup (A)
-        </button>
-        <button
-          type="button"
-          onClick={() => setActive("dest")}
-          className={`ct-btn px-3 py-2 text-xs ${active === "dest" ? "bg-amber/15 text-amber border border-amber/50" : "ct-btn-ghost"}`}
-        >
-          <Flag className="h-3.5 w-3.5" /> Set drop-off (B)
-        </button>
-      </div>
+      {mode === "both" ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => setActive("origin")}
+            className={`ct-btn px-3 py-2 text-xs ${active === "origin" ? "bg-blue/15 text-blue border border-blue/50" : "ct-btn-ghost"}`}
+          >
+            <MapPin className="h-3.5 w-3.5" /> Set pickup (A)
+          </button>
+          <button
+            type="button"
+            onClick={() => setActive("dest")}
+            className={`ct-btn px-3 py-2 text-xs ${active === "dest" ? "bg-amber/15 text-amber border border-amber/50" : "ct-btn-ghost"}`}
+          >
+            <Flag className="h-3.5 w-3.5" /> Set drop-off (B)
+          </button>
+        </div>
+      ) : null}
 
       {/* place search */}
       <div className="relative">
