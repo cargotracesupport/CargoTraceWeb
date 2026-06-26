@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import type { Delivery } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import Spinner from "@/components/Spinner";
-import { Avatar, MapPin, Flag, Package, Check, Search, Truck } from "@/components/icons";
+import Link from "next/link";
+import { Avatar, MapPin, Flag, Package, Check, Search, Truck, Plus } from "@/components/icons";
 
 export type DriverOption = {
   id: string;
@@ -115,15 +116,20 @@ export default function AssignConsole({
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <h1 className="text-lg font-semibold tracking-tight">
-          {unassignedOnly ? "Unassigned orders" : "Dispatch board"}
-        </h1>
-        <p className="text-sm text-muted2">
-          {unassignedOnly
-            ? "Orders waiting for a driver. Assign a driver and vehicle to each."
-            : "Assign each delivery to a driver. Updates appear live as drivers move."}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight">
+            {unassignedOnly ? "Unassigned orders" : "Dispatch board"}
+          </h1>
+          <p className="text-sm text-muted2">
+            {unassignedOnly
+              ? "Orders waiting for a driver. Assign a driver and vehicle to each."
+              : "Assign each delivery to a driver. Updates appear live as drivers move."}
+          </p>
+        </div>
+        <Link href="/agent/deliveries/new" className="ct-btn-primary">
+          <Plus className="h-4 w-4" /> New delivery
+        </Link>
       </div>
 
       {/* Stat tiles */}

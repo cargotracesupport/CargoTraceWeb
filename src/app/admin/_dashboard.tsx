@@ -22,6 +22,7 @@ import { estimateEtaMinutes, formatEta } from "@/lib/eta";
 export type DeliveryRow = Delivery & {
   driver?: { full_name: string | null } | null;
   vehicle?: { name: string | null; plate: string | null } | null;
+  agent?: { full_name: string | null } | null;
 };
 
 interface Counts {
@@ -116,6 +117,7 @@ export default function Dashboard({
                       ...row,
                       driver: row.driver ?? d.driver,
                       vehicle: row.vehicle ?? d.vehicle,
+                      agent: row.agent ?? d.agent,
                     }
                   : d,
               );

@@ -40,18 +40,29 @@ function parsePoint(latStr: string, lngStr: string): LatLng | null {
   return { lat, lng };
 }
 
+export type AgentOption = { id: string; full_name: string | null };
+
 export default function NewDeliveryForm({
   orgId,
   drivers,
   vehicles,
   devices,
   delivery,
+  agents,
+  ownerAgentId,
+  backHref = "/admin/deliveries",
 }: {
   orgId: string;
   drivers: Profile[];
   vehicles: Vehicle[];
   devices: Device[];
   delivery?: Delivery;
+  // Admin context: list of agents to assign ownership to (shows a picker).
+  agents?: AgentOption[];
+  // Agent context: this agent owns the delivery (no picker).
+  ownerAgentId?: string;
+  // Where Cancel / "Back to deliveries" go (agent vs admin).
+  backHref?: string;
 }) {
   const router = useRouter();
   const editing = !!delivery;
@@ -85,6 +96,10 @@ export default function NewDeliveryForm({
   const [driverId, setDriverId] = useState(delivery?.driver_id ?? "");
   const [vehicleId, setVehicleId] = useState(delivery?.vehicle_id ?? "");
   const [deviceId, setDeviceId] = useState(delivery?.device_id ?? "");
+  // Owning agent: fixed in agent context, picked by admin otherwise.
+  const [agentId, setAgentId] = useState(
+    ownerAgentId ?? delivery?.agent_id ?? "",
+  );
 
   /** When the user pastes "lat,lng" into the lat box, split it across both fields. */
   function handleLatPaste(
@@ -166,6 +181,7 @@ export default function NewDeliveryForm({
       driver_id: driverId || null,
       vehicle_id: vehicleId || null,
       device_id: deviceId || null,
+      agent_id: agentId || null,
     };
 
     // ── Edit: update in place, then back to the list ──────────────
@@ -187,7 +203,7 @@ export default function NewDeliveryForm({
         setError(err.message);
         return;
       }
-      router.push("/admin/deliveries");
+      router.push(backHref);
       router.refresh();
       return;
     }
@@ -257,7 +273,7 @@ export default function NewDeliveryForm({
         </div>
 
         <div className="flex justify-center gap-2">
-          <Link href="/admin/deliveries" className="ct-btn-ghost">
+          <Link href={backHref} className="ct-btn-ghost">
             Back to deliveries
           </Link>
           <Link
@@ -274,6 +290,35 @@ export default function NewDeliveryForm({
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
+      {/* Owning agent (admin chooses who handles this delivery) */}
+      {agents ? (
+        <fieldset className="ct-card flex flex-col gap-3 p-5">
+          <legend className="px-1 text-sm font-semibold">Owning agent</legend>
+          <div>
+            <label className="ct-label" htmlFor="owner_agent">
+              Assign this delivery to an agent
+            </label>
+            <select
+              id="owner_agent"
+              value={agentId}
+              onChange={(e) => setAgentId(e.target.value)}
+              className="ct-input"
+            >
+              <option value="">— None (admin only) —</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.full_name ?? "Agent"}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted">
+              The chosen agent will see this delivery in their dispatch board and
+              assign it to one of their drivers.
+            </p>
+          </div>
+        </fieldset>
+      ) : null}
+
       {/* Shipment */}
       <fieldset className="ct-card flex flex-col gap-4 p-5">
         <legend className="px-1 text-sm font-semibold">Shipment</legend>
@@ -542,7 +587,7 @@ export default function NewDeliveryForm({
       ) : null}
 
       <div className="flex items-center justify-end gap-2">
-        <Link href="/admin/deliveries" className="ct-btn-ghost">
+        <Link href={backHref} className="ct-btn-ghost">
           Cancel
         </Link>
         <button type="submit" disabled={busy} className="ct-btn-primary">

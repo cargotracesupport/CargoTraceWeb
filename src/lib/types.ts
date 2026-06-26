@@ -28,6 +28,7 @@ export interface Profile {
   full_name: string | null;
   phone: string | null;
   vehicle_id: string | null;
+  agent_id: string | null;
   created_at: string;
 }
 
@@ -57,6 +58,7 @@ export interface Delivery {
   driver_id: string | null;
   vehicle_id: string | null;
   device_id: string | null;
+  agent_id: string | null;
   origin_label: string | null;
   origin_lat: number | null;
   origin_lng: number | null;

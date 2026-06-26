@@ -8,6 +8,7 @@ import { Plus, Pencil, Locate } from "@/components/icons";
 
 type DeliveryRow = Delivery & {
   driver: { full_name: string | null } | null;
+  agent: { full_name: string | null } | null;
 };
 
 function fmtDate(iso: string | null): string {
@@ -81,7 +82,9 @@ export default async function AdminDeliveriesPage() {
   const supabase = createClient();
   const { data } = await supabase
     .from("deliveries")
-    .select("*, driver:profiles(full_name)")
+    .select(
+      "*, driver:profiles!deliveries_driver_id_fkey(full_name), agent:profiles!deliveries_agent_id_fkey(full_name)",
+    )
     .order("created_at", { ascending: false });
 
   const deliveries = (data ?? []) as DeliveryRow[];
@@ -134,6 +137,11 @@ export default async function AdminDeliveriesPage() {
                         <p className="max-w-[200px] truncate text-xs text-muted2">
                           {d.goods}
                         </p>
+                        {d.agent?.full_name ? (
+                          <p className="mt-0.5 max-w-[200px] truncate text-[11px] text-muted">
+                            Agent: {d.agent.full_name}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-3 py-3 align-top">
                         <div className="flex items-center gap-1.5 text-xs">
@@ -180,6 +188,11 @@ export default async function AdminDeliveriesPage() {
                       {d.reference ?? "—"}
                     </p>
                     <p className="truncate text-xs text-muted2">{d.goods}</p>
+                    {d.agent?.full_name ? (
+                      <p className="truncate text-[11px] text-muted">
+                        Agent: {d.agent.full_name}
+                      </p>
+                    ) : null}
                   </div>
                   <DeliveryStatusBadge status={d.status} />
                 </div>

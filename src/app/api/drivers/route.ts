@@ -82,6 +82,11 @@ export async function POST(req: Request) {
     body.vehicleId,
   );
 
+  // A driver created by an agent belongs to that agent; admin-made drivers are
+  // org-level (no owning agent).
+  const agent_id =
+    session.profile.role === "agent" ? session.profile.id : null;
+
   const { error: profErr } = await admin
     .from("profiles")
     .update({
@@ -90,6 +95,7 @@ export async function POST(req: Request) {
       full_name: fullName,
       phone,
       vehicle_id,
+      agent_id,
     })
     .eq("id", created.user.id);
 

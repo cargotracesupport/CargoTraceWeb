@@ -8,7 +8,9 @@ export default async function AdminDashboardPage() {
   // Active deliveries for the live map + list.
   const { data: active } = await supabase
     .from("deliveries")
-    .select("*, driver:profiles(full_name), vehicle:vehicles(name, plate)")
+    .select(
+      "*, driver:profiles!deliveries_driver_id_fkey(full_name), vehicle:vehicles(name, plate), agent:profiles!deliveries_agent_id_fkey(full_name)",
+    )
     .in("status", ["assigned", "en_route"])
     .order("created_at", { ascending: false });
 

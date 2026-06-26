@@ -13,16 +13,22 @@ export default async function EditDeliveryPage({
   const session = await requireRole("admin");
   const supabase = createClient();
 
-  const [deliveryRes, driversRes, vehiclesRes, devicesRes] = await Promise.all([
-    supabase.from("deliveries").select("*").eq("id", params.id).maybeSingle(),
-    supabase
-      .from("profiles")
-      .select("*")
-      .eq("role", "driver")
-      .order("full_name", { ascending: true }),
-    supabase.from("vehicles").select("*").order("name", { ascending: true }),
-    supabase.from("devices").select("*").order("label", { ascending: true }),
-  ]);
+  const [deliveryRes, driversRes, vehiclesRes, devicesRes, agentsRes] =
+    await Promise.all([
+      supabase.from("deliveries").select("*").eq("id", params.id).maybeSingle(),
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("role", "driver")
+        .order("full_name", { ascending: true }),
+      supabase.from("vehicles").select("*").order("name", { ascending: true }),
+      supabase.from("devices").select("*").order("label", { ascending: true }),
+      supabase
+        .from("profiles")
+        .select("id, full_name")
+        .eq("role", "agent")
+        .order("full_name", { ascending: true }),
+    ]);
 
   const delivery = deliveryRes.data as Delivery | null;
   if (!delivery) notFound();
@@ -30,6 +36,10 @@ export default async function EditDeliveryPage({
   const drivers = (driversRes.data ?? []) as Profile[];
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
   const devices = (devicesRes.data ?? []) as Device[];
+  const agents = (agentsRes.data ?? []) as {
+    id: string;
+    full_name: string | null;
+  }[];
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
@@ -54,6 +64,7 @@ export default async function EditDeliveryPage({
         vehicles={vehicles}
         devices={devices}
         delivery={delivery}
+        agents={agents}
       />
     </div>
   );
