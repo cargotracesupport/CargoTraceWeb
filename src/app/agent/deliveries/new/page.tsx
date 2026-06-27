@@ -9,7 +9,7 @@ export default async function AgentNewDeliveryPage() {
   const supabase = createClient();
 
   // RLS scopes drivers to this agent's own; vehicles/devices are org-shared.
-  const [driversRes, vehiclesRes, devicesRes] = await Promise.all([
+  const [driversRes, vehiclesRes, devicesRes, activeRes] = await Promise.all([
     supabase
       .from("profiles")
       .select("*")
@@ -17,11 +17,21 @@ export default async function AgentNewDeliveryPage() {
       .order("full_name", { ascending: true }),
     supabase.from("vehicles").select("*").order("name", { ascending: true }),
     supabase.from("devices").select("*").order("label", { ascending: true }),
+    supabase
+      .from("deliveries")
+      .select("id, driver_id, status, reference")
+      .in("status", ["assigned", "en_route"]),
   ]);
 
   const drivers = (driversRes.data ?? []) as Profile[];
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
   const devices = (devicesRes.data ?? []) as Device[];
+  const activeAssignments = (activeRes.data ?? []) as {
+    id: string;
+    driver_id: string | null;
+    status: string;
+    reference: string | null;
+  }[];
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-4">
@@ -44,6 +54,7 @@ export default async function AgentNewDeliveryPage() {
         devices={devices}
         ownerAgentId={session.profile.id}
         backHref="/agent"
+        activeAssignments={activeAssignments}
       />
     </div>
   );

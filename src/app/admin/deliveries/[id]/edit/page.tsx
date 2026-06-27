@@ -13,7 +13,7 @@ export default async function EditDeliveryPage({
   const session = await requireRole("admin");
   const supabase = createClient();
 
-  const [deliveryRes, driversRes, vehiclesRes, devicesRes, agentsRes] =
+  const [deliveryRes, driversRes, vehiclesRes, devicesRes, agentsRes, activeRes] =
     await Promise.all([
       supabase.from("deliveries").select("*").eq("id", params.id).maybeSingle(),
       supabase
@@ -28,6 +28,10 @@ export default async function EditDeliveryPage({
         .select("id, full_name")
         .eq("role", "agent")
         .order("full_name", { ascending: true }),
+      supabase
+        .from("deliveries")
+        .select("id, driver_id, status, reference")
+        .in("status", ["assigned", "en_route"]),
     ]);
 
   const delivery = deliveryRes.data as Delivery | null;
@@ -39,6 +43,12 @@ export default async function EditDeliveryPage({
   const agents = (agentsRes.data ?? []) as {
     id: string;
     full_name: string | null;
+  }[];
+  const activeAssignments = (activeRes.data ?? []) as {
+    id: string;
+    driver_id: string | null;
+    status: string;
+    reference: string | null;
   }[];
 
   return (
@@ -65,6 +75,7 @@ export default async function EditDeliveryPage({
         devices={devices}
         delivery={delivery}
         agents={agents}
+        activeAssignments={activeAssignments}
       />
     </div>
   );

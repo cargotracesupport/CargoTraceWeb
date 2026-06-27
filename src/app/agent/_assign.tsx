@@ -114,6 +114,24 @@ export default function AssignConsole({
     setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
   }, []);
 
+  // Driver availability: which active delivery each driver is on (if any).
+  const busyByDriver = useMemo(() => {
+    const m = new Map<
+      string,
+      { status: string; reference: string | null; deliveryId: string }
+    >();
+    for (const r of rows) {
+      if (!r.driver_id) continue;
+      if (r.status !== "en_route" && r.status !== "assigned") continue;
+      m.set(r.driver_id, {
+        status: r.status,
+        reference: r.reference,
+        deliveryId: r.id,
+      });
+    }
+    return m;
+  }, [rows]);
+
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -167,6 +185,7 @@ export default function AssignConsole({
               vehicles={vehicles}
               driverName={driverName}
               vehicleLabel={vehicleLabel}
+              busyByDriver={busyByDriver}
               onAssigned={patchRow}
             />
           ))}
@@ -193,6 +212,7 @@ export default function AssignConsole({
                 vehicles={vehicles}
                 driverName={driverName}
                 vehicleLabel={vehicleLabel}
+                busyByDriver={busyByDriver}
                 onAssigned={patchRow}
               />
             ))}
@@ -208,6 +228,7 @@ export default function AssignConsole({
                   vehicles={vehicles}
                   driverName={driverName}
                   vehicleLabel={vehicleLabel}
+                  busyByDriver={busyByDriver}
                   onAssigned={patchRow}
                 />
               ))}
@@ -227,6 +248,7 @@ function DeliveryRow({
   vehicles,
   driverName,
   vehicleLabel,
+  busyByDriver,
   onAssigned,
 }: {
   delivery: Delivery;
@@ -234,6 +256,10 @@ function DeliveryRow({
   vehicles: VehicleOption[];
   driverName: (id: string | null) => string | null;
   vehicleLabel: (id: string | null) => string | null;
+  busyByDriver: Map<
+    string,
+    { status: string; reference: string | null; deliveryId: string }
+  >;
   onAssigned: (row: Delivery) => void;
 }) {
   const [selected, setSelected] = useState<string>(delivery.driver_id ?? "");
@@ -345,11 +371,22 @@ function DeliveryRow({
             className="ct-input sm:flex-1"
           >
             <option value="">— Unassigned —</option>
-            {drivers.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.full_name ?? "Driver"}
-              </option>
-            ))}
+            {drivers.map((d) => {
+              const b = busyByDriver.get(d.id);
+              // Don't mark them as busy if this is the same delivery.
+              const isMe = b?.deliveryId === delivery.id;
+              const busyNow = b && !isMe;
+              const suffix = busyNow
+                ? b.status === "en_route"
+                  ? ` — On the road · ${b.reference ?? "active trip"}`
+                  : ` — On ${b.reference ?? "active trip"}`
+                : " — Available";
+              return (
+                <option key={d.id} value={d.id}>
+                  {(d.full_name ?? "Driver") + suffix}
+                </option>
+              );
+            })}
           </select>
 
           <label className="sr-only" htmlFor={`veh-${delivery.id}`}>

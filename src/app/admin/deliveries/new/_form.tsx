@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -50,6 +50,16 @@ function parsePoint(latStr: string, lngStr: string): LatLng | null {
 }
 
 export type AgentOption = { id: string; full_name: string | null };
+/**
+ * Lightweight active-delivery row used to mark a driver as busy in the picker.
+ * Pass `assigned`/`en_route` rows from the org for the admin form.
+ */
+export type ActiveAssignment = {
+  id: string;
+  driver_id: string | null;
+  status: string;
+  reference: string | null;
+};
 
 export default function NewDeliveryForm({
   orgId,
@@ -60,6 +70,7 @@ export default function NewDeliveryForm({
   agents,
   ownerAgentId,
   backHref = "/admin/deliveries",
+  activeAssignments,
 }: {
   orgId: string;
   drivers: Profile[];
@@ -72,6 +83,8 @@ export default function NewDeliveryForm({
   ownerAgentId?: string;
   // Where Cancel / "Back to deliveries" go (agent vs admin).
   backHref?: string;
+  // Rows used to mark drivers as busy in the picker.
+  activeAssignments?: ActiveAssignment[];
 }) {
   const router = useRouter();
   const editing = !!delivery;
@@ -105,6 +118,25 @@ export default function NewDeliveryForm({
   const [driverId, setDriverId] = useState(delivery?.driver_id ?? "");
   const [vehicleId, setVehicleId] = useState(delivery?.vehicle_id ?? "");
   const [deviceId, setDeviceId] = useState(delivery?.device_id ?? "");
+
+  // For the driver picker: { driver_id -> the active delivery they're on }.
+  // Only en_route / assigned count as busy; the delivery being edited is excluded.
+  const busyByDriver = useMemo(() => {
+    const m = new Map<
+      string,
+      { status: string; reference: string | null; deliveryId: string }
+    >();
+    for (const a of activeAssignments ?? []) {
+      if (!a.driver_id) continue;
+      if (a.status !== "en_route" && a.status !== "assigned") continue;
+      m.set(a.driver_id, {
+        status: a.status,
+        reference: a.reference,
+        deliveryId: a.id,
+      });
+    }
+    return m;
+  }, [activeAssignments]);
   // Owning agent: fixed in agent context, picked by admin otherwise.
   const [agentId, setAgentId] = useState(
     ownerAgentId ?? delivery?.agent_id ?? "",
@@ -518,16 +550,36 @@ export default function NewDeliveryForm({
             <select
               id="driver"
               value={driverId}
-              onChange={(e) => setDriverId(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDriverId(v);
+                // Auto-fill the driver's assigned vehicle (same as agent board).
+                const drv = drivers.find((d) => d.id === v);
+                setVehicleId(v ? (drv?.vehicle_id ?? "") : "");
+              }}
               className="ct-input"
             >
               <option value="">Unassigned</option>
-              {drivers.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.full_name ?? d.id}
-                </option>
-              ))}
+              {drivers.map((d) => {
+                const b = busyByDriver.get(d.id);
+                const isMe = delivery && b?.deliveryId === delivery.id;
+                const busy = b && !isMe;
+                const suffix = busy
+                  ? b.status === "en_route"
+                    ? ` — On the road · ${b.reference ?? "active trip"}`
+                    : ` — On ${b.reference ?? "active trip"}`
+                  : " — Available";
+                return (
+                  <option key={d.id} value={d.id}>
+                    {(d.full_name ?? d.id) + suffix}
+                  </option>
+                );
+              })}
             </select>
+            <p className="mt-1 text-xs text-muted">
+              Available drivers are free for a new trip; busy drivers are
+              currently assigned or on the road.
+            </p>
           </div>
           <div>
             <label className="ct-label" htmlFor="vehicle">
@@ -536,10 +588,12 @@ export default function NewDeliveryForm({
             <select
               id="vehicle"
               value={vehicleId}
-              onChange={(e) => setVehicleId(e.target.value)}
-              className="ct-input"
+              onChange={() => {}}
+              disabled
+              title="Vehicle is set from the driver — edit it on the driver"
+              className="ct-input cursor-not-allowed"
             >
-              <option value="">None</option>
+              <option value="">— vehicle from driver —</option>
               {vehicles.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.name}
@@ -547,6 +601,9 @@ export default function NewDeliveryForm({
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-muted">
+              Set from the chosen driver. To change it, edit the driver.
+            </p>
           </div>
           <div>
             <label className="ct-label" htmlFor="device">
