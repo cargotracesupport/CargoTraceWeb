@@ -3,19 +3,31 @@
 import { useEffect, useState } from "react";
 import { Truck } from "@/components/icons";
 
-const KEY = "ct_vehicle_ok";
+// Per-driver key so two drivers on one device don't clash, and so confirmation
+// persists across browser restarts (matching the remembered login). Stores the
+// plate the driver last confirmed — the gate only reappears when it differs from
+// the currently assigned vehicle, i.e. when their vehicle number actually changed.
+const keyFor = (driverId: string) => `ct_vehicle_ok:${driverId}`;
 // Forgiving compare: ignore spaces + case ("mh12ab1234" == "MH 12 AB 1234").
 const norm = (s: string) => s.replace(/\s+/g, "").toUpperCase();
 
 /**
- * Strict shift gate: a driver must enter their assigned vehicle number before
- * they can see any deliveries. Confirmation is remembered for the browser
- * session (cleared on logout). Drivers with no assigned vehicle aren't gated.
+ * Vehicle gate: a driver confirms their assigned vehicle number before they can
+ * see deliveries. The confirmation is remembered, so a returning driver is NOT
+ * re-prompted — the popup only appears the first time, or when their assigned
+ * vehicle number has changed since they last confirmed.
  */
-export default function VehicleGate({ plate }: { plate: string | null }) {
+export default function VehicleGate({
+  plate,
+  driverId,
+}: {
+  plate: string | null;
+  driverId: string;
+}) {
   // Default to "blocked" so an unverified driver never sees deliveries first;
-  // the effect lifts the gate if this session already confirmed.
+  // the effect lifts the gate if this vehicle was already confirmed.
   const [verified, setVerified] = useState(false);
+  const [changed, setChanged] = useState(false); // popup is due to a vehicle change
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -25,11 +37,16 @@ export default function VehicleGate({ plate }: { plate: string | null }) {
       return;
     }
     try {
-      if (sessionStorage.getItem(KEY) === plate) setVerified(true);
+      const stored = localStorage.getItem(keyFor(driverId));
+      if (stored === plate) {
+        setVerified(true); // already confirmed THIS vehicle — no popup
+      } else if (stored) {
+        setChanged(true); // confirmed a different vehicle before → it changed
+      }
     } catch {
-      /* sessionStorage unavailable — keep the gate up */
+      /* storage unavailable — keep the gate up */
     }
-  }, [plate]);
+  }, [plate, driverId]);
 
   if (!plate || verified) return null;
 
@@ -37,7 +54,7 @@ export default function VehicleGate({ plate }: { plate: string | null }) {
     e.preventDefault();
     if (norm(value) === norm(plate!)) {
       try {
-        sessionStorage.setItem(KEY, plate!);
+        localStorage.setItem(keyFor(driverId), plate!);
       } catch {
         /* ignore */
       }
@@ -55,13 +72,20 @@ export default function VehicleGate({ plate }: { plate: string | null }) {
         className="ct-card w-full max-w-sm p-6"
         style={{ boxShadow: "var(--ct-shadow-pop)" }}
       >
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+        <div
+          className={`mb-3 flex h-12 w-12 items-center justify-center rounded-2xl ${
+            changed ? "bg-amber/10 text-amber" : "bg-primary/10 text-primary"
+          }`}
+        >
           <Truck className="h-6 w-6" />
         </div>
-        <h2 className="text-lg font-bold tracking-tight">Confirm your vehicle</h2>
+        <h2 className="text-lg font-bold tracking-tight">
+          {changed ? "Your vehicle has changed" : "Confirm your vehicle"}
+        </h2>
         <p className="mt-1 text-sm text-muted2">
-          Enter your assigned vehicle number to start your shift and view your
-          deliveries.
+          {changed
+            ? "Your assigned vehicle was updated. Enter the new vehicle number to keep going."
+            : "Enter your assigned vehicle number to start your shift and view your deliveries."}
         </p>
 
         <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
@@ -94,8 +118,10 @@ export default function VehicleGate({ plate }: { plate: string | null }) {
           <button
             type="submit"
             onClick={() => {
+              // Disowning the vehicle — forget the confirmation so the next login
+              // re-prompts.
               try {
-                sessionStorage.removeItem(KEY);
+                localStorage.removeItem(keyFor(driverId));
               } catch {
                 /* ignore */
               }

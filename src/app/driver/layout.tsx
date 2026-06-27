@@ -53,8 +53,8 @@ export default async function DriverLayout({
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-4">{children}</main>
 
-      {/* Strict gate: confirm assigned vehicle before any deliveries are usable */}
-      <VehicleGate plate={plate} />
+      {/* Gate: confirm assigned vehicle — only re-prompts when it changes */}
+      <VehicleGate plate={plate} driverId={session.profile.id} />
     </div>
   );
 }

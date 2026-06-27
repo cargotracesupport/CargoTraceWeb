@@ -44,14 +44,6 @@ export default function LogoutButton() {
           <form action="/api/auth/signout" method="post">
             <button
               type="submit"
-              onClick={() => {
-                // Re-prompt the vehicle gate on the next driver login.
-                try {
-                  sessionStorage.removeItem("ct_vehicle_ok");
-                } catch {
-                  /* ignore */
-                }
-              }}
               className="ct-btn-primary px-3 py-2 text-sm"
             >
               <LogOut className="h-4 w-4" />

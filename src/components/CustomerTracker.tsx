@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import DropoffSetter from "@/components/DropoffSetter";
 import { BrandMark, Wordmark, Check, MapPin, Flag, Truck, Phone, Avatar } from "@/components/icons";
@@ -50,6 +50,20 @@ export default function CustomerTracker({
   initial: PublicDelivery;
 }) {
   const [delivery, setDelivery] = useState<PublicDelivery>(initial);
+  // Popup shown when the driver/vehicle handling this delivery changes.
+  const [changeNotice, setChangeNotice] = useState<{
+    driver: string | null;
+    vehicle: string | null;
+  } | null>(null);
+
+  const vehicleOf = (d: PublicDelivery) =>
+    d.vehicle?.plate ?? d.vehicle?.name ?? null;
+  // Track the last-seen driver/vehicle so we can spot a mid-trip change. Seeded
+  // from the initial load so the first paint never fires a notice.
+  const seenRef = useRef<{ driver: string | null; vehicle: string | null }>({
+    driver: initial.driver?.full_name ?? null,
+    vehicle: vehicleOf(initial),
+  });
 
   useEffect(() => {
     let active = true;
@@ -61,7 +75,24 @@ export default function CustomerTracker({
         });
         if (!res.ok) return;
         const json = (await res.json()) as { delivery?: PublicDelivery };
-        if (active && json.delivery) setDelivery(json.delivery);
+        if (!active || !json.delivery) return;
+        const d = json.delivery;
+
+        // Notify only when an already-known driver/vehicle actually changes
+        // (not on first assignment, where the previous value was null).
+        const newDriver = d.driver?.full_name ?? null;
+        const newVehicle = vehicleOf(d);
+        const prev = seenRef.current;
+        const vehicleChanged =
+          !!newVehicle && !!prev.vehicle && newVehicle !== prev.vehicle;
+        const driverChanged =
+          !!newDriver && !!prev.driver && newDriver !== prev.driver;
+        if (vehicleChanged || driverChanged) {
+          setChangeNotice({ driver: newDriver, vehicle: newVehicle });
+        }
+        seenRef.current = { driver: newDriver, vehicle: newVehicle };
+
+        setDelivery(d);
       } catch {
         // transient network error — keep showing the last known state
       }
@@ -342,6 +373,54 @@ export default function CustomerTracker({
           Live tracking by <Wordmark className="font-semibold" />
         </p>
       </div>
+
+      {/* Driver / vehicle change popup */}
+      {changeNotice ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50 p-4 backdrop-blur-sm sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setChangeNotice(null)}
+        >
+          <div
+            className="ct-card w-full max-w-sm p-5"
+            style={{ boxShadow: "var(--ct-shadow-pop)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-amber/10 text-amber">
+              <Truck className="h-5 w-5" />
+            </div>
+            <h3 className="text-base font-semibold">Your delivery was updated</h3>
+            <p className="mt-1 text-sm text-muted2">
+              A different driver or vehicle is now handling your delivery.
+            </p>
+            <div className="mt-4 rounded-xl border border-border bg-s2 p-3 text-sm">
+              {changeNotice.driver ? (
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted2">Driver</span>
+                  <span className="font-medium">{changeNotice.driver}</span>
+                </div>
+              ) : null}
+              {changeNotice.vehicle ? (
+                <div className="mt-1.5 flex items-center justify-between gap-3">
+                  <span className="text-muted2">Vehicle</span>
+                  <span className="inline-flex items-center gap-1 font-mono">
+                    <Truck className="h-3.5 w-3.5" />
+                    {changeNotice.vehicle}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => setChangeNotice(null)}
+              className="ct-btn-primary mt-4 w-full justify-center"
+            >
+              Got it
+            </button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
