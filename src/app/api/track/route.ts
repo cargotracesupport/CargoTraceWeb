@@ -1,17 +1,33 @@
 import { NextResponse } from "next/server";
+import { getSessionProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
+// How far the client-supplied recordedAt may stray from the server clock before
+// we distrust it and stamp server-side instead (guards against back/forward-dating).
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
 /**
- * GPS ingest endpoint. ONE entry point for both:
- *   - GPS hardware:  POST { hardwareId, lat, lng, speed?, heading?, recordedAt? }
- *   - Driver phone (interim): POST { deliveryId, lat, lng, speed?, heading?, recordedAt? }
+ * GPS ingest endpoint — AUTHENTICATED. The driver app shares the phone's GPS
+ * from the (logged-in) driver delivery screen. We require a session and verify
+ * the caller is allowed to post for this delivery: the assigned driver, an admin
+ * in the delivery's org, or the agent who owns it (the admin "Simulate" tool).
  *
- * Writes a position row and updates the delivery's denormalized last-known position.
- * Uses the service role (bypasses RLS) — this is a trusted server endpoint.
+ * POST { deliveryId, lat, lng, speed?, heading?, recordedAt? }
+ *
+ * NOTE: dedicated GPS hardware (no session cookie) is not in use yet. When it
+ * is added, give it a separate path authenticated by a per-device shared secret
+ * — do NOT re-open this endpoint to unauthenticated callers.
  */
 export async function POST(req: Request) {
+  // Must be signed in. Without this, anyone who learns a delivery UUID could
+  // spoof its truck position and force status transitions.
+  const session = await getSessionProfile();
+  if (!session) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -21,69 +37,73 @@ export async function POST(req: Request) {
 
   const lat = Number(body.lat);
   const lng = Number(body.lng);
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return NextResponse.json({ error: "lat/lng required" }, { status: 400 });
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < -90 ||
+    lat > 90 ||
+    lng < -180 ||
+    lng > 180
+  ) {
+    return NextResponse.json({ error: "valid lat/lng required" }, { status: 400 });
   }
-  const speed = body.speed != null ? Number(body.speed) : null;
-  const heading = body.heading != null ? Number(body.heading) : null;
-  const recordedAt =
-    typeof body.recordedAt === "string" ? body.recordedAt : new Date().toISOString();
+
+  // speed/heading are optional; reject non-finite values rather than writing NaN.
+  let speed: number | null = null;
+  if (body.speed != null) {
+    const s = Number(body.speed);
+    if (!Number.isFinite(s) || s < 0) {
+      return NextResponse.json({ error: "invalid speed" }, { status: 400 });
+    }
+    speed = s;
+  }
+  let heading: number | null = null;
+  if (body.heading != null) {
+    const h = Number(body.heading);
+    if (!Number.isFinite(h)) {
+      return NextResponse.json({ error: "invalid heading" }, { status: 400 });
+    }
+    heading = h;
+  }
+
+  // Trust the client timestamp only if it's near the server clock; otherwise
+  // stamp server-side. Prevents back/forward-dating the position history.
+  const now = Date.now();
+  let recordedAt = new Date(now).toISOString();
+  if (typeof body.recordedAt === "string") {
+    const t = Date.parse(body.recordedAt);
+    if (Number.isFinite(t) && Math.abs(now - t) <= MAX_CLOCK_SKEW_MS) {
+      recordedAt = new Date(t).toISOString();
+    }
+  }
+
+  const deliveryId =
+    typeof body.deliveryId === "string" ? body.deliveryId : "";
+  if (!deliveryId) {
+    return NextResponse.json({ error: "deliveryId required" }, { status: 400 });
+  }
 
   const supabase = createAdminClient();
 
-  // Resolve which delivery this fix belongs to.
-  let delivery:
-    | { id: string; org_id: string; device_id: string | null; driver_id: string | null }
-    | null = null;
+  const { data: delivery } = await supabase
+    .from("deliveries")
+    .select("id, org_id, device_id, driver_id, agent_id")
+    .eq("id", deliveryId)
+    .maybeSingle();
 
-  if (typeof body.hardwareId === "string" && body.hardwareId) {
-    // Hardware path: find the device, then its active delivery.
-    const { data: device } = await supabase
-      .from("devices")
-      .select("id, org_id")
-      .eq("hardware_id", body.hardwareId)
-      .single();
-    if (!device) {
-      return NextResponse.json({ error: "unknown device" }, { status: 404 });
-    }
-    const { data: active } = await supabase
-      .from("deliveries")
-      .select("id, org_id, device_id, driver_id")
-      .eq("device_id", device.id)
-      .in("status", ["pending", "assigned", "en_route"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    // Still record the raw position even without an active delivery.
-    if (active) delivery = active;
-    else {
-      await supabase.from("positions").insert({
-        org_id: device.org_id,
-        device_id: device.id,
-        lat,
-        lng,
-        speed,
-        heading,
-        recorded_at: recordedAt,
-      });
-      return NextResponse.json({ ok: true, delivery: null });
-    }
-  } else if (typeof body.deliveryId === "string" && body.deliveryId) {
-    // Driver-phone path.
-    const { data } = await supabase
-      .from("deliveries")
-      .select("id, org_id, device_id, driver_id")
-      .eq("id", body.deliveryId)
-      .single();
-    delivery = data;
-    if (!delivery) {
-      return NextResponse.json({ error: "unknown delivery" }, { status: 404 });
-    }
-  } else {
-    return NextResponse.json(
-      { error: "hardwareId or deliveryId required" },
-      { status: 400 },
-    );
+  if (!delivery) {
+    return NextResponse.json({ error: "unknown delivery" }, { status: 404 });
+  }
+
+  // Authorization: the assigned driver, an admin in the same org, or the owning
+  // agent. Anyone else (incl. an agent for another agent's delivery) is rejected.
+  const role = session.profile.role;
+  const allowed =
+    delivery.driver_id === session.userId ||
+    (role === "admin" && delivery.org_id === session.profile.org_id) ||
+    (role === "agent" && delivery.agent_id === session.userId);
+  if (!allowed) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   await supabase.from("positions").insert({
@@ -98,7 +118,7 @@ export async function POST(req: Request) {
     recorded_at: recordedAt,
   });
 
-  // Update denormalized last-known position; auto-advance assigned -> en_route on first ping.
+  // Update denormalized last-known position.
   await supabase
     .from("deliveries")
     .update({
@@ -109,7 +129,8 @@ export async function POST(req: Request) {
     })
     .eq("id", delivery.id);
 
-  // First GPS ping takes a delivery live, whether or not a driver was assigned.
+  // First GPS ping takes a delivery live (assigned -> en_route). Stays scoped to
+  // this delivery, which we've already confirmed the caller owns.
   await supabase
     .from("deliveries")
     .update({ status: "en_route", started_at: recordedAt })

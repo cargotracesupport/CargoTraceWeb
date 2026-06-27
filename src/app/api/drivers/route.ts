@@ -70,6 +70,9 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
+  if (fullName.length > 120 || email.length > 200) {
+    return NextResponse.json({ error: "name or email too long" }, { status: 400 });
+  }
 
   const admin = createAdminClient();
 
@@ -120,7 +123,8 @@ export async function POST(req: Request) {
     .eq("id", created.user.id);
 
   if (profErr) {
-    return NextResponse.json({ error: profErr.message }, { status: 400 });
+    console.error("driver profile update failed:", profErr.message);
+    return NextResponse.json({ error: "could not create driver" }, { status: 400 });
   }
 
   // Clean up the throwaway org created by the signup trigger.
@@ -167,13 +171,19 @@ export async function PATCH(req: Request) {
       { status: 400 },
     );
   }
+  if (fullName.length > 120) {
+    return NextResponse.json({ error: "name too long" }, { status: 400 });
+  }
 
   const admin = createAdminClient();
 
-  // Only edit a driver that belongs to this caller's org.
+  // Only edit a driver that belongs to this caller's org — and, for agents,
+  // only a driver they own. The service-role client bypasses RLS, so this
+  // ownership check is the only thing stopping an agent from editing another
+  // agent's driver.
   const { data: target } = await admin
     .from("profiles")
-    .select("id, org_id, role")
+    .select("id, org_id, role, agent_id")
     .eq("id", id)
     .single();
 
@@ -183,6 +193,9 @@ export async function PATCH(req: Request) {
     target.role !== "driver"
   ) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+  if (session.profile.role === "agent" && target.agent_id !== session.profile.id) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const update: Record<string, unknown> = { full_name: fullName, phone };
@@ -206,7 +219,8 @@ export async function PATCH(req: Request) {
 
   const { error } = await admin.from("profiles").update(update).eq("id", id);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("driver PATCH failed:", error.message);
+    return NextResponse.json({ error: "could not update driver" }, { status: 400 });
   }
 
   return NextResponse.json({ ok: true });
@@ -230,10 +244,11 @@ export async function DELETE(req: Request) {
 
   const admin = createAdminClient();
 
-  // Defense in depth: only delete a driver that belongs to this admin's org.
+  // Defense in depth: only delete a driver in this caller's org — and, for
+  // agents, only a driver they own (the service-role client bypasses RLS).
   const { data: target } = await admin
     .from("profiles")
-    .select("id, org_id, role")
+    .select("id, org_id, role, agent_id")
     .eq("id", id)
     .single();
 
@@ -244,10 +259,14 @@ export async function DELETE(req: Request) {
   ) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+  if (session.profile.role === "agent" && target.agent_id !== session.profile.id) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("driver DELETE failed:", error.message);
+    return NextResponse.json({ error: "could not delete driver" }, { status: 400 });
   }
 
   return NextResponse.json({ ok: true });

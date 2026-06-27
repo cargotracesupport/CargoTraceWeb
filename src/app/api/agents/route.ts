@@ -33,6 +33,9 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
+  if (fullName.length > 120 || email.length > 200) {
+    return NextResponse.json({ error: "name or email too long" }, { status: 400 });
+  }
 
   const admin = createAdminClient();
 
@@ -63,7 +66,8 @@ export async function POST(req: Request) {
     .eq("id", created.user.id);
 
   if (profErr) {
-    return NextResponse.json({ error: profErr.message }, { status: 400 });
+    console.error("agent profile update failed:", profErr.message);
+    return NextResponse.json({ error: "could not create agent" }, { status: 400 });
   }
 
   // Clean up the throwaway org created by the signup trigger.
@@ -105,6 +109,9 @@ export async function PATCH(req: Request) {
       { status: 400 },
     );
   }
+  if (fullName.length > 120) {
+    return NextResponse.json({ error: "name too long" }, { status: 400 });
+  }
 
   const admin = createAdminClient();
 
@@ -127,7 +134,8 @@ export async function PATCH(req: Request) {
     .update({ full_name: fullName, phone })
     .eq("id", id);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("agent PATCH failed:", error.message);
+    return NextResponse.json({ error: "could not update agent" }, { status: 400 });
   }
 
   return NextResponse.json({ ok: true });
@@ -167,7 +175,8 @@ export async function DELETE(req: Request) {
 
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("agent DELETE failed:", error.message);
+    return NextResponse.json({ error: "could not delete agent" }, { status: 400 });
   }
 
   return NextResponse.json({ ok: true });

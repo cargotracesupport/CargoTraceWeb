@@ -62,6 +62,7 @@ function RowActions({ d }: { d: DeliveryRow }) {
       <Link
         href={`/track/${d.tracking_token}`}
         target="_blank"
+        rel="noreferrer"
         title="Open tracker"
         className="ct-btn-ghost px-2 py-1 text-xs"
       >

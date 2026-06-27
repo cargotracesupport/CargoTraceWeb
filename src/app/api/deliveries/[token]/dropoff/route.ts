@@ -1,10 +1,17 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 // Compare by the trailing digits so "+91 90000 00000" == "9000000000".
 const normPhone = (s: string) => (s ?? "").replace(/\D/g, "").slice(-10);
+
+// Throttle phone-match attempts per token: even with a valid token, the customer
+// phone shouldn't be brute-forceable. 10 tries/minute is plenty for a real human.
+const RL_LIMIT = 10;
+const RL_WINDOW_MS = 60_000;
+const MAX_LABEL_LEN = 200;
 
 /**
  * Customer drop-off endpoint (no login — the link token + matching mobile number
@@ -29,6 +36,15 @@ export async function POST(
     return NextResponse.json(
       { error: "Enter a valid mobile number." },
       { status: 400 },
+    );
+  }
+
+  // Rate-limit per tracking token to blunt phone-number brute-forcing.
+  const rl = rateLimit(`dropoff:${params.token}`, RL_LIMIT, RL_WINDOW_MS);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Please wait a minute and try again." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
     );
   }
 
@@ -70,7 +86,9 @@ export async function POST(
   // Set the drop-off.
   const lat = Number(body.lat);
   const lng = Number(body.lng);
-  const label = body.label ? String(body.label).trim() : null;
+  const label = body.label
+    ? String(body.label).trim().slice(0, MAX_LABEL_LEN)
+    : null;
   if (
     !Number.isFinite(lat) ||
     !Number.isFinite(lng) ||
@@ -101,7 +119,11 @@ export async function POST(
     .eq("id", d.id);
 
   if (upErr) {
-    return NextResponse.json({ error: upErr.message }, { status: 400 });
+    console.error("dropoff update failed:", upErr.message);
+    return NextResponse.json(
+      { error: "Could not save the drop-off location." },
+      { status: 400 },
+    );
   }
 
   return NextResponse.json({ ok: true });

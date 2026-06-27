@@ -347,6 +347,7 @@ export default function NewDeliveryForm({
           <Link
             href={`/track/${created.token}`}
             target="_blank"
+            rel="noreferrer"
             className="ct-btn-ghost"
           >
             Open tracker
