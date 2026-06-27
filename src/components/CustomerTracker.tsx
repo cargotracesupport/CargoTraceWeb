@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import DropoffSetter from "@/components/DropoffSetter";
-import { BrandMark, Wordmark, Check, MapPin, Flag } from "@/components/icons";
+import { BrandMark, Wordmark, Check, MapPin, Flag, Truck, Phone, Avatar } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
 import { estimateEtaMinutes, formatEta } from "@/lib/eta";
 import type { DeliveryStatus } from "@/lib/types";
@@ -25,6 +25,8 @@ export interface PublicDelivery {
   last_speed: number | null;
   last_position_at: string | null;
   delivered_at: string | null;
+  driver?: { full_name: string | null; phone: string | null } | null;
+  vehicle?: { plate: string | null; name: string | null } | null;
 }
 
 const POLL_MS = 5000;
@@ -261,6 +263,59 @@ export default function CustomerTracker({
             </p>
           )}
         </section>
+
+        {/* Driver card — surfaced once the customer has set drop-off */}
+        {delivery.driver?.full_name ? (
+          <section className="ct-card p-5">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted2">
+              Your driver
+            </div>
+            <div className="mt-3 flex items-center gap-3">
+              <Avatar name={delivery.driver.full_name} size={44} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold text-text">
+                  {delivery.driver.full_name}
+                </div>
+                {delivery.vehicle?.plate || delivery.vehicle?.name ? (
+                  <div className="mt-0.5 inline-flex items-center gap-1 font-mono text-xs text-muted2">
+                    <Truck className="h-3.5 w-3.5" />
+                    {delivery.vehicle.plate ?? delivery.vehicle.name}
+                  </div>
+                ) : null}
+              </div>
+              {delivery.driver.phone ? (
+                <a
+                  href={`tel:${delivery.driver.phone}`}
+                  className="ct-btn-primary shrink-0 !py-2"
+                  aria-label={`Call ${delivery.driver.full_name}`}
+                >
+                  <Phone className="h-4 w-4" /> Call
+                </a>
+              ) : null}
+            </div>
+            {delivery.driver.phone ? (
+              <a
+                href={`tel:${delivery.driver.phone}`}
+                className="mt-2 block font-mono text-xs text-muted2 hover:text-primary"
+              >
+                {delivery.driver.phone}
+              </a>
+            ) : null}
+            {hasPosition ? (
+              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-green/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-green">
+                <span className="relative inline-flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-70" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
+                </span>
+                On the way · updated {fmtTime(delivery.last_position_at) || "—"}
+              </p>
+            ) : (
+              <p className="mt-3 text-xs text-muted2">
+                Waiting for the driver to start the trip…
+              </p>
+            )}
+          </section>
+        ) : null}
 
         {/* Live map */}
         <section className="ct-card overflow-hidden p-0">

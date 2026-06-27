@@ -7,7 +7,7 @@ import AssignConsole, {
 } from "../_assign";
 
 export default async function AgentUnassignedPage() {
-  await requireRole("agent");
+  const session = await requireRole("agent");
   const supabase = createClient();
 
   const [deliveriesRes, driversRes, vehiclesRes] = await Promise.all([
@@ -35,6 +35,7 @@ export default async function AgentUnassignedPage() {
       initialDeliveries={deliveries}
       drivers={drivers}
       vehicles={vehicles}
+      agentId={session.profile.id}
       mode="unassigned"
     />
   );

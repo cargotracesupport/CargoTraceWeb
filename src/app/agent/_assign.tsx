@@ -23,11 +23,13 @@ export default function AssignConsole({
   initialDeliveries,
   drivers,
   vehicles,
+  agentId,
   mode = "all",
 }: {
   initialDeliveries: Delivery[];
   drivers: DriverOption[];
   vehicles: VehicleOption[];
+  agentId: string;
   mode?: "all" | "unassigned";
 }) {
   const unassignedOnly = mode === "unassigned";
@@ -64,6 +66,9 @@ export default function AssignConsole({
               return prev.filter((r) => r.id !== (payload.old as Delivery).id);
             }
             const next = payload.new as Delivery;
+            // Defense-in-depth: never show another agent's delivery, even if a
+            // realtime event somehow slipped through (DB misconfig regression).
+            if (next.agent_id && next.agent_id !== agentId) return prev;
             const i = prev.findIndex((r) => r.id === next.id);
             if (i === -1) return [next, ...prev];
             const copy = prev.slice();
@@ -76,7 +81,7 @@ export default function AssignConsole({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [agentId]);
 
   const counts = useMemo(() => {
     let unassigned = 0,

@@ -9,7 +9,13 @@ import type { Delivery } from "@/lib/types";
  * Alerts the agent when a new order (delivery) is created in their org — a short
  * chime + a tappable toast. Mounted in the agent layout so it fires on any page.
  */
-export default function NewOrderAlert({ orgId }: { orgId: string }) {
+export default function NewOrderAlert({
+  orgId,
+  agentId,
+}: {
+  orgId: string;
+  agentId: string;
+}) {
   const [toast, setToast] = useState<{ ref: string; assigned: boolean } | null>(
     null,
   );
@@ -65,7 +71,12 @@ export default function NewOrderAlert({ orgId }: { orgId: string }) {
         { event: "INSERT", schema: "public", table: "deliveries" },
         (payload) => {
           const d = payload.new as Delivery;
+          // Only alert THIS agent for orders they own — an org has multiple
+          // agents, and even admin-created deliveries assigned to other agents
+          // shouldn't fire chimes here. Unassigned (admin-only) deliveries are
+          // also ignored — they go to admin tools, not the agent's inbox.
           if (d.org_id !== orgId) return;
+          if (d.agent_id !== agentId) return;
           chime();
           setToast({
             ref: d.reference ?? "New order",
@@ -77,7 +88,7 @@ export default function NewOrderAlert({ orgId }: { orgId: string }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [orgId]);
+  }, [orgId, agentId]);
 
   useEffect(() => {
     if (!toast) return;
