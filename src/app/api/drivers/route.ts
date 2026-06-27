@@ -21,6 +21,24 @@ async function orgVehicleId(
   return data ? id : null;
 }
 
+/** Returns the agent id only if it's an agent in the org, else null. */
+async function orgAgentId(
+  admin: ReturnType<typeof createAdminClient>,
+  orgId: string,
+  raw: unknown,
+): Promise<string | null> {
+  const id = raw ? String(raw) : "";
+  if (!id) return null;
+  const { data } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("id", id)
+    .eq("org_id", orgId)
+    .eq("role", "agent")
+    .maybeSingle();
+  return data ? id : null;
+}
+
 /**
  * Admin or agent: create a driver login inside the caller's org.
  * Drivers don't self-register — the sender (admin) or a dispatcher (agent)
@@ -82,10 +100,12 @@ export async function POST(req: Request) {
     body.vehicleId,
   );
 
-  // A driver created by an agent belongs to that agent; admin-made drivers are
-  // org-level (no owning agent).
+  // A driver created by an agent belongs to that agent; an admin picks the
+  // owning agent (optional).
   const agent_id =
-    session.profile.role === "agent" ? session.profile.id : null;
+    session.profile.role === "agent"
+      ? session.profile.id
+      : await orgAgentId(admin, session.profile.org_id, body.agentId);
 
   const { error: profErr } = await admin
     .from("profiles")
@@ -173,6 +193,14 @@ export async function PATCH(req: Request) {
       admin,
       session.profile.org_id,
       body.vehicleId,
+    );
+  }
+  // Only an admin may reassign a driver's owning agent.
+  if (session.profile.role === "admin" && "agentId" in body) {
+    update.agent_id = await orgAgentId(
+      admin,
+      session.profile.org_id,
+      body.agentId,
     );
   }
 

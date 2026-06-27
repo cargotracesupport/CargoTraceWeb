@@ -34,7 +34,11 @@ export default async function AgentDriversPage() {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <DriversManager drivers={drivers} vehicles={vehicles} />
-        <VehiclesManager orgId={session.profile.org_id} vehicles={vehicles} />
+        <VehiclesManager
+          orgId={session.profile.org_id}
+          agentId={session.profile.id}
+          vehicles={vehicles}
+        />
       </div>
     </div>
   );

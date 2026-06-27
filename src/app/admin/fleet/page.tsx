@@ -7,7 +7,7 @@ export default async function FleetPage() {
   const session = await requireRole("admin");
   const supabase = createClient();
 
-  const [driversRes, vehiclesRes, devicesRes] = await Promise.all([
+  const [driversRes, vehiclesRes, devicesRes, agentsRes] = await Promise.all([
     supabase
       .from("profiles")
       .select("*")
@@ -15,11 +15,20 @@ export default async function FleetPage() {
       .order("full_name", { ascending: true }),
     supabase.from("vehicles").select("*").order("name", { ascending: true }),
     supabase.from("devices").select("*").order("label", { ascending: true }),
+    supabase
+      .from("profiles")
+      .select("id, full_name")
+      .eq("role", "agent")
+      .order("full_name", { ascending: true }),
   ]);
 
   const drivers = (driversRes.data ?? []) as Profile[];
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
   const devices = (devicesRes.data ?? []) as Device[];
+  const agents = (agentsRes.data ?? []) as {
+    id: string;
+    full_name: string | null;
+  }[];
 
   return (
     <div className="flex flex-col gap-4">
@@ -35,6 +44,7 @@ export default async function FleetPage() {
         drivers={drivers}
         vehicles={vehicles}
         devices={devices}
+        agents={agents}
       />
     </div>
   );

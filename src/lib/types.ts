@@ -38,6 +38,7 @@ export interface Vehicle {
   org_id: string;
   name: string;
   plate: string | null;
+  agent_id: string | null;
   created_at: string;
 }
 

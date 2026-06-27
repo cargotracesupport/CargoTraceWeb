@@ -12,6 +12,8 @@ export type VehicleLite = {
   name: string | null;
 };
 
+export type AgentLite = { id: string; full_name: string | null };
+
 const vehLabel = (v: VehicleLite) => v.plate ?? v.name ?? "Vehicle";
 
 /**
@@ -32,6 +34,7 @@ export function PeopleCard({
   emptyLabel,
   deleteConfirm,
   vehicles,
+  agents,
 }: {
   title: string;
   people: Profile[];
@@ -43,6 +46,8 @@ export function PeopleCard({
   emptyLabel: string;
   deleteConfirm: string;
   vehicles?: VehicleLite[];
+  // Admin context: assign an owning agent (shows an owner picker + owner column).
+  agents?: AgentLite[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -54,6 +59,7 @@ export function PeopleCard({
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [vehicleId, setVehicleId] = useState("");
+  const [ownerAgentId, setOwnerAgentId] = useState("");
 
   const noun = title.toLowerCase().replace(/s$/, "");
 
@@ -79,6 +85,7 @@ export function PeopleCard({
           password,
           phone: phone.trim() || undefined,
           ...(vehicles ? { vehicleId } : {}),
+          ...(agents ? { agentId: ownerAgentId } : {}),
         }),
       });
       if (!res.ok) {
@@ -92,6 +99,7 @@ export function PeopleCard({
       setPassword("");
       setPhone("");
       setVehicleId("");
+      setOwnerAgentId("");
       setOpen(false);
       router.refresh();
     } catch (err) {
@@ -204,6 +212,27 @@ export function PeopleCard({
             </div>
           ) : null}
 
+          {agents ? (
+            <div>
+              <label className="ct-label" htmlFor={`${idPrefix}_owner`}>
+                Owner agent (optional)
+              </label>
+              <select
+                id={`${idPrefix}_owner`}
+                value={ownerAgentId}
+                onChange={(e) => setOwnerAgentId(e.target.value)}
+                className="ct-input"
+              >
+                <option value="">— None (admin only) —</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.full_name ?? "Agent"}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+
           {error ? <FormError message={error} /> : null}
 
           <button type="submit" disabled={busy} className="ct-btn-primary">
@@ -231,6 +260,7 @@ export function PeopleCard({
               deleteConfirm={deleteConfirm}
               vehicles={vehicles}
               assignedIds={assignedIds}
+              agents={agents}
             />
           ))}
         </ul>
@@ -246,6 +276,7 @@ function PersonRow({
   deleteConfirm,
   vehicles,
   assignedIds,
+  agents,
 }: {
   person: Profile;
   endpoint: string;
@@ -253,6 +284,7 @@ function PersonRow({
   deleteConfirm: string;
   vehicles?: VehicleLite[];
   assignedIds?: Set<string>;
+  agents?: AgentLite[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -261,8 +293,10 @@ function PersonRow({
   const [fullName, setFullName] = useState(person.full_name ?? "");
   const [phone, setPhone] = useState(person.phone ?? "");
   const [vehicleId, setVehicleId] = useState(person.vehicle_id ?? "");
+  const [ownerAgentId, setOwnerAgentId] = useState(person.agent_id ?? "");
 
   const currentVehicle = vehicles?.find((v) => v.id === person.vehicle_id);
+  const currentOwner = agents?.find((a) => a.id === person.agent_id);
   // Offer free vehicles + this driver's own current one.
   const editVehicles = vehicles?.filter(
     (v) => !assignedIds?.has(v.id) || v.id === person.vehicle_id,
@@ -272,6 +306,7 @@ function PersonRow({
     setFullName(person.full_name ?? "");
     setPhone(person.phone ?? "");
     setVehicleId(person.vehicle_id ?? "");
+    setOwnerAgentId(person.agent_id ?? "");
     setError(null);
   }
 
@@ -288,6 +323,7 @@ function PersonRow({
           fullName: fullName.trim(),
           phone: phone.trim() || undefined,
           ...(vehicles ? { vehicleId } : {}),
+          ...(agents ? { agentId: ownerAgentId } : {}),
         }),
       });
       if (!res.ok) {
@@ -355,6 +391,27 @@ function PersonRow({
               />
             </>
           )}
+          {agents ? (
+            <>
+              <label className="ct-label" htmlFor={`edit-owner-${person.id}`}>
+                Owner agent
+              </label>
+              <select
+                id={`edit-owner-${person.id}`}
+                value={ownerAgentId}
+                onChange={(e) => setOwnerAgentId(e.target.value)}
+                className="ct-input"
+                aria-label="Owner agent"
+              >
+                <option value="">— None (admin only) —</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.full_name ?? "Agent"}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : null}
           {error ? <FormError message={error} /> : null}
           <div className="flex gap-2">
             <button
@@ -400,6 +457,11 @@ function PersonRow({
         {currentVehicle ? (
           <p className="mt-0.5 inline-flex items-center gap-1 font-mono text-xs text-muted2">
             <Truck className="h-3.5 w-3.5" /> {vehLabel(currentVehicle)}
+          </p>
+        ) : null}
+        {agents ? (
+          <p className="mt-0.5 text-[11px] text-muted">
+            {currentOwner ? `Agent: ${currentOwner.full_name ?? "Agent"}` : "Unassigned"}
           </p>
         ) : null}
       </div>

@@ -9,16 +9,20 @@ import DeleteButton from "@/components/DeleteButton";
 import { Truck, Package, Users } from "@/components/icons";
 import { PeopleCard, CardHeader, EmptyState, FormError } from "@/components/people";
 
+type AgentOpt = { id: string; full_name: string | null };
+
 export default function Fleet({
   orgId,
   drivers,
   vehicles,
   devices,
+  agents,
 }: {
   orgId: string;
   drivers: Profile[];
   vehicles: Vehicle[];
   devices: Device[];
+  agents: AgentOpt[];
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -33,21 +37,27 @@ export default function Fleet({
         emptyLabel="No drivers yet. Add one to start assigning deliveries."
         deleteConfirm="Delete this driver's account? This can't be undone."
         vehicles={vehicles}
+        agents={agents}
       />
-      <VehiclesCard orgId={orgId} vehicles={vehicles} />
+      <VehiclesCard orgId={orgId} vehicles={vehicles} agents={agents} />
       <DevicesCard orgId={orgId} devices={devices} vehicles={vehicles} />
     </div>
   );
 }
+
+const ownerName = (agents: AgentOpt[], id: string | null) =>
+  id ? (agents.find((a) => a.id === id)?.full_name ?? "Agent") : null;
 
 /* ── Vehicles ─────────────────────────────────────────────────────────── */
 
 function VehiclesCard({
   orgId,
   vehicles,
+  agents,
 }: {
   orgId: string;
   vehicles: Vehicle[];
+  agents: AgentOpt[];
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -56,6 +66,7 @@ function VehiclesCard({
 
   const [name, setName] = useState("");
   const [plate, setPlate] = useState("");
+  const [ownerAgentId, setOwnerAgentId] = useState("");
 
   async function addVehicle(e: React.FormEvent) {
     e.preventDefault();
@@ -66,6 +77,7 @@ function VehiclesCard({
       org_id: orgId,
       name: name.trim(),
       plate: plate.trim() || null,
+      agent_id: ownerAgentId || null,
     });
     setBusy(false);
     if (err) {
@@ -74,6 +86,7 @@ function VehiclesCard({
     }
     setName("");
     setPlate("");
+    setOwnerAgentId("");
     setOpen(false);
     router.refresh();
   }
@@ -121,6 +134,24 @@ function VehiclesCard({
               className="ct-input font-mono"
             />
           </div>
+          <div>
+            <label className="ct-label" htmlFor="vehicle_owner">
+              Owner agent (optional)
+            </label>
+            <select
+              id="vehicle_owner"
+              value={ownerAgentId}
+              onChange={(e) => setOwnerAgentId(e.target.value)}
+              className="ct-input"
+            >
+              <option value="">— None (admin only) —</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.full_name ?? "Agent"}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {error ? <FormError message={error} /> : null}
 
@@ -152,6 +183,11 @@ function VehiclesCard({
                 ) : (
                   <p className="text-xs text-muted">No plate</p>
                 )}
+                <p className="text-[11px] text-muted">
+                  {ownerName(agents, v.agent_id)
+                    ? `Agent: ${ownerName(agents, v.agent_id)}`
+                    : "Unassigned"}
+                </p>
               </div>
               <DeleteButton
                 table="vehicles"

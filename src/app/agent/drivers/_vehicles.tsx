@@ -11,9 +11,11 @@ import { CardHeader, EmptyState, FormError } from "@/components/people";
 
 export default function VehiclesManager({
   orgId,
+  agentId,
   vehicles,
 }: {
   orgId: string;
+  agentId: string;
   vehicles: Vehicle[];
 }) {
   const router = useRouter();
@@ -34,6 +36,7 @@ export default function VehiclesManager({
       org_id: orgId,
       plate,
       name: model.trim() || plate, // name is NOT NULL — default to the number
+      agent_id: agentId, // the agent owns vehicles they create (RLS requires it)
     });
     setBusy(false);
     if (err) {
