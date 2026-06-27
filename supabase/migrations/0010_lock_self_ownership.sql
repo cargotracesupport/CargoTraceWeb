@@ -20,3 +20,8 @@ begin
   return new;
 end;
 $$;
+
+-- This is a trigger function — it must never be callable as a REST RPC. The
+-- trigger fires via the trigger system regardless of EXECUTE grants, so revoking
+-- here removes the /rest/v1/rpc surface without affecting the trigger.
+revoke execute on function public.prevent_self_privilege_change() from public, anon, authenticated;
