@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Profile, Vehicle, Device } from "@/lib/types";
 import Spinner from "@/components/Spinner";
 import DeleteButton from "@/components/DeleteButton";
-import { Truck, Package, Users } from "@/components/icons";
+import { Truck, Package, Users, Pencil } from "@/components/icons";
 import { PeopleCard, CardHeader, EmptyState, FormError } from "@/components/people";
 
 type AgentOpt = { id: string; full_name: string | null };
@@ -17,18 +17,21 @@ export default function Fleet({
   vehicles,
   devices,
   agents,
+  emails,
 }: {
   orgId: string;
   drivers: Profile[];
   vehicles: Vehicle[];
   devices: Device[];
   agents: AgentOpt[];
+  emails?: Record<string, string>;
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
       <PeopleCard
         title="Drivers"
         people={drivers}
+        emails={emails}
         endpoint="/api/drivers"
         Icon={Users}
         idPrefix="driver"
@@ -172,33 +175,161 @@ function VehiclesCard({
       ) : (
         <ul className="divide-y divide-border">
           {vehicles.map((v) => (
-            <li
-              key={v.id}
-              className="flex items-start justify-between gap-2 px-4 py-3"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-text">{v.name}</p>
-                {v.plate ? (
-                  <p className="font-mono text-xs text-muted2">{v.plate}</p>
-                ) : (
-                  <p className="text-xs text-muted">No plate</p>
-                )}
-                <p className="text-[11px] text-muted">
-                  {ownerName(agents, v.agent_id)
-                    ? `Agent: ${ownerName(agents, v.agent_id)}`
-                    : "Unassigned"}
-                </p>
-              </div>
-              <DeleteButton
-                table="vehicles"
-                id={v.id}
-                confirmText="Delete this vehicle?"
-              />
-            </li>
+            <AdminVehicleRow key={v.id} vehicle={v} agents={agents} />
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+/** Admin vehicle row: edit name, plate and the owning agent in place. */
+function AdminVehicleRow({
+  vehicle,
+  agents,
+}: {
+  vehicle: Vehicle;
+  agents: AgentOpt[];
+}) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState(vehicle.name ?? "");
+  const [plate, setPlate] = useState(vehicle.plate ?? "");
+  const [ownerAgentId, setOwnerAgentId] = useState(vehicle.agent_id ?? "");
+
+  function reset() {
+    setName(vehicle.name ?? "");
+    setPlate(vehicle.plate ?? "");
+    setOwnerAgentId(vehicle.agent_id ?? "");
+    setError(null);
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    const supabase = createClient();
+    const { error: err } = await supabase
+      .from("vehicles")
+      .update({
+        name: name.trim() || plate.trim(),
+        plate: plate.trim() || null,
+        agent_id: ownerAgentId || null,
+      })
+      .eq("id", vehicle.id);
+    setBusy(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setEditing(false);
+    router.refresh();
+  }
+
+  if (editing) {
+    return (
+      <li className="px-4 py-3">
+        <form onSubmit={save} className="flex flex-col gap-2">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            placeholder="Name"
+            className="ct-input"
+            aria-label="Vehicle name"
+          />
+          <input
+            value={plate}
+            onChange={(e) => setPlate(e.target.value)}
+            placeholder="Plate (optional)"
+            className="ct-input font-mono"
+            aria-label="Plate"
+          />
+          <label className="ct-label" htmlFor={`veh-owner-${vehicle.id}`}>
+            Owner agent
+          </label>
+          <select
+            id={`veh-owner-${vehicle.id}`}
+            value={ownerAgentId}
+            onChange={(e) => setOwnerAgentId(e.target.value)}
+            className="ct-input"
+            aria-label="Owner agent"
+          >
+            <option value="">— None (admin only) —</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.full_name ?? "Agent"}
+              </option>
+            ))}
+          </select>
+          {error ? <FormError message={error} /> : null}
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="ct-btn-primary px-3 py-1.5 text-xs"
+            >
+              {busy ? (
+                <>
+                  <Spinner /> Saving…
+                </>
+              ) : (
+                "Save"
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false);
+                reset();
+              }}
+              className="ct-btn-ghost px-3 py-1.5 text-xs"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-start justify-between gap-2 px-4 py-3">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-text">{vehicle.name}</p>
+        {vehicle.plate ? (
+          <p className="font-mono text-xs text-muted2">{vehicle.plate}</p>
+        ) : (
+          <p className="text-xs text-muted">No plate</p>
+        )}
+        <p className="text-[11px] text-muted">
+          {ownerName(agents, vehicle.agent_id)
+            ? `Agent: ${ownerName(agents, vehicle.agent_id)}`
+            : "Unassigned"}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={() => {
+            reset();
+            setEditing(true);
+          }}
+          title="Edit vehicle"
+          className="ct-btn-ghost px-2 py-1 text-xs"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </button>
+        <DeleteButton
+          table="vehicles"
+          id={vehicle.id}
+          confirmText="Delete this vehicle?"
+        />
+      </div>
+    </li>
   );
 }
 

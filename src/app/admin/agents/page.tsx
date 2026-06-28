@@ -1,6 +1,6 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { emailsByIds } from "@/lib/emails";
 import type { Profile } from "@/lib/types";
 import AgentsManager from "./_agents";
 
@@ -17,15 +17,8 @@ export default async function AgentsPage() {
   const agents = (data ?? []) as Profile[];
 
   // Login emails live in auth.users, not profiles — fetch them so the admin can
-  // see and edit each agent's email. Uses the service-role client (admin-only page).
-  const admin = createAdminClient();
-  const emailPairs = await Promise.all(
-    agents.map(async (a) => {
-      const { data: u } = await admin.auth.admin.getUserById(a.id);
-      return [a.id, u.user?.email ?? ""] as const;
-    }),
-  );
-  const emails = Object.fromEntries(emailPairs) as Record<string, string>;
+  // see and edit each agent's email.
+  const emails = await emailsByIds(agents.map((a) => a.id));
 
   return (
     <div className="flex flex-col gap-4">

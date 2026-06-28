@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { emailsByIds } from "@/lib/emails";
 import type { Profile, Vehicle, Device } from "@/lib/types";
 import Fleet from "./_fleet";
 
@@ -29,6 +30,8 @@ export default async function FleetPage() {
     id: string;
     full_name: string | null;
   }[];
+  // Driver login emails so the admin can edit them.
+  const emails = await emailsByIds(drivers.map((d) => d.id));
 
   return (
     <div className="flex flex-col gap-4">
@@ -45,6 +48,7 @@ export default async function FleetPage() {
         vehicles={vehicles}
         devices={devices}
         agents={agents}
+        emails={emails}
       />
     </div>
   );

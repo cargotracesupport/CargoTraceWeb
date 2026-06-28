@@ -355,12 +355,35 @@ function PersonRow({
     return (
       <li className="px-4 py-3">
         <form onSubmit={save} className="flex flex-col gap-2">
+          {/* Name + phone + email are editable for everyone (drivers & agents) */}
+          <input
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            required
+            placeholder="Full name"
+            className="ct-input"
+            aria-label="Full name"
+          />
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Phone (optional)"
+            className="ct-input"
+            aria-label="Phone"
+          />
+          {canEditEmail ? (
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Login email"
+              className="ct-input"
+              aria-label="Login email"
+            />
+          ) : null}
+          {/* Drivers additionally pick a vehicle */}
           {vehicles ? (
-            // Drivers: only the vehicle number is editable.
             <>
-              <p className="text-sm font-medium text-text">
-                {person.full_name ?? `Unnamed ${noun}`}
-              </p>
               <label className="ct-label" htmlFor={`edit-veh-${person.id}`}>
                 Vehicle number
               </label>
@@ -382,35 +405,7 @@ function PersonRow({
                 ))}
               </select>
             </>
-          ) : (
-            <>
-              <input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                placeholder="Full name"
-                className="ct-input"
-                aria-label="Full name"
-              />
-              <input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="Phone (optional)"
-                className="ct-input"
-                aria-label="Phone"
-              />
-              {canEditEmail ? (
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Login email"
-                  className="ct-input"
-                  aria-label="Login email"
-                />
-              ) : null}
-            </>
-          )}
+          ) : null}
           {agents ? (
             <>
               <label className="ct-label" htmlFor={`edit-owner-${person.id}`}>

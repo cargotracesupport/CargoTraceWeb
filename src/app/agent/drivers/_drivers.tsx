@@ -9,14 +9,17 @@ import { Users } from "@/components/icons";
 export default function DriversManager({
   drivers,
   vehicles,
+  emails,
 }: {
   drivers: Profile[];
   vehicles: Vehicle[];
+  emails?: Record<string, string>;
 }) {
   return (
     <PeopleCard
       title="Drivers"
       people={drivers}
+      emails={emails}
       endpoint="/api/drivers"
       Icon={Users}
       idPrefix="driver"
