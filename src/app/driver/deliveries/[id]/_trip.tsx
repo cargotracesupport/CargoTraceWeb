@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { DeliveryStatus } from "@/lib/types";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
-import { Locate } from "@/components/icons";
+import { Locate, Check } from "@/components/icons";
 
 type Place = { lat: number; lng: number; label: string | null };
 type Pos = { lat: number; lng: number; speed: number | null; heading: number | null };
@@ -31,7 +31,9 @@ export default function DriverTrip({
   );
   const [gps, setGps] = useState<GpsState>("off");
   const [gpsMsg, setGpsMsg] = useState<string | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<null | "start" | "deliver">(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const watchRef = useRef<number | null>(null);
@@ -119,7 +121,7 @@ export default function DriverTrip({
       .update({ status: "en_route", started_at: new Date().toISOString() })
       .eq("id", deliveryId);
     setBusy(false);
-    setConfirmOpen(false);
+    setConfirmAction(null);
     if (err) {
       setError("Could not start the trip. Please try again.");
       return;
@@ -138,6 +140,7 @@ export default function DriverTrip({
       .update({ status: "delivered", delivered_at: new Date().toISOString() })
       .eq("id", deliveryId);
     setBusy(false);
+    setConfirmAction(null);
     if (err) {
       setError("Could not update the delivery. Please try again.");
       return;
@@ -255,7 +258,7 @@ export default function DriverTrip({
             <button
               type="button"
               disabled={busy}
-              onClick={() => setConfirmOpen(true)}
+              onClick={() => setConfirmAction("start")}
               className="ct-btn-primary w-full py-3 text-base disabled:opacity-60"
             >
               <Locate className="h-4 w-4" /> Start trip
@@ -272,10 +275,10 @@ export default function DriverTrip({
             <button
               type="button"
               disabled={busy}
-              onClick={markDelivered}
+              onClick={() => setConfirmAction("deliver")}
               className="ct-btn-primary w-full py-3 text-base disabled:opacity-60"
             >
-              {busy ? "Saving…" : "Mark delivered"}
+              <Check className="h-4 w-4" /> Mark delivered
             </button>
             {gps === "denied" || gps === "error" ? (
               <button
@@ -321,13 +324,13 @@ export default function DriverTrip({
         {error ? <p className="text-center text-sm text-red">{error}</p> : null}
       </div>
 
-      {/* Confirm-start dialog */}
-      {confirmOpen ? (
+      {/* Confirm dialog — used for both Start trip and Mark delivered */}
+      {confirmAction ? (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 backdrop-blur-sm sm:items-center"
           role="dialog"
           aria-modal="true"
-          onClick={() => !busy && setConfirmOpen(false)}
+          onClick={() => !busy && setConfirmAction(null)}
         >
           <div
             className="ct-card w-full max-w-sm p-5"
@@ -335,20 +338,28 @@ export default function DriverTrip({
           >
             <div className="mb-3 flex items-center gap-2">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-green/15 text-green">
-                <Locate className="h-4 w-4" />
+                {confirmAction === "start" ? (
+                  <Locate className="h-4 w-4" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
               </span>
-              <h3 className="text-base font-semibold">Start this delivery?</h3>
+              <h3 className="text-base font-semibold">
+                {confirmAction === "start"
+                  ? "Start this delivery?"
+                  : "Mark as delivered?"}
+              </h3>
             </div>
             <p className="text-sm text-muted2">
-              Your phone&rsquo;s live location will be shared with the customer and
-              dispatcher until you mark the delivery as delivered. Your browser may
-              ask for location permission.
+              {confirmAction === "start"
+                ? "Your phone’s live location will be shared with the customer and dispatcher until you mark the delivery as delivered. Your browser may ask for location permission."
+                : "This completes the delivery and stops sharing your location. You can’t undo this."}
             </p>
             <div className="mt-5 flex gap-2">
               <button
                 type="button"
                 disabled={busy}
-                onClick={() => setConfirmOpen(false)}
+                onClick={() => setConfirmAction(null)}
                 className="ct-btn-ghost flex-1 justify-center"
               >
                 Cancel
@@ -356,10 +367,16 @@ export default function DriverTrip({
               <button
                 type="button"
                 disabled={busy}
-                onClick={confirmStart}
+                onClick={confirmAction === "start" ? confirmStart : markDelivered}
                 className="ct-btn-primary flex-1 justify-center disabled:opacity-60"
               >
-                {busy ? "Starting…" : "Start trip"}
+                {confirmAction === "start"
+                  ? busy
+                    ? "Starting…"
+                    : "Start trip"
+                  : busy
+                    ? "Saving…"
+                    : "Mark delivered"}
               </button>
             </div>
           </div>
