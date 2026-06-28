@@ -4,7 +4,11 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { mapStyleUrl } from "@/lib/maptiler";
-import { roadRoute } from "@/lib/route";
+
+// Camera tilt (degrees) for the 3D "moving" navigation view — the billboard
+// markers (warehouse, truck) stand upright on the tilted ground plane. Kept on
+// every camera move (init / fit / fly) so the 3D feel is consistent.
+const PITCH = 50;
 
 export interface MapMarker {
   id: string;
@@ -95,7 +99,7 @@ function setRouteLine(
 
 /**
  * Reusable live map. Renders markers (truck / origin / destination) and, when a
- * `route` is given, a dashed A→B direction line. Invalid coordinates are ignored
+ * direction is given, a dashed straight A→B line. Invalid coordinates are ignored
  * so bad data never crashes the map. Used by Admin, Driver and Customer.
  */
 export default function LiveMap({
@@ -110,7 +114,7 @@ export default function LiveMap({
 }: {
   markers: MapMarker[];
   route?: Array<[number, number]>;
-  /** When set, the map draws the by-road driving route from A→B (falls back to a line). */
+  /** When set, the map draws a straight direction line from A→B. */
   roadFrom?: [number, number];
   roadTo?: [number, number];
   /** Fly the camera to this point (e.g. a selected driver) instead of fitting all markers. */
@@ -132,6 +136,7 @@ export default function LiveMap({
       style: mapStyleUrl(),
       center: [120.9842, 14.5995],
       zoom: 11,
+      pitch: PITCH,
       attributionControl: false,
     });
     map.addControl(
@@ -182,7 +187,10 @@ export default function LiveMap({
     if (fit && !focus && valid.length > 0) {
       const bounds = new maplibregl.LngLatBounds();
       valid.forEach((m) => bounds.extend([m.lng, m.lat]));
+      // Fit flat (no pitch here — fitting bounds *at* a tilt over-zooms); the
+      // camera keeps the 3D pitch set at init / re-applied below.
       map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 });
+      if (Math.round(map.getPitch()) !== PITCH) map.setPitch(PITCH);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markers, fit]);
@@ -198,6 +206,7 @@ export default function LiveMap({
     map.flyTo({
       center: [focus.lng, focus.lat],
       zoom: focus.zoom ?? 13,
+      pitch: PITCH,
       duration: 1100,
       essential: true,
     });
@@ -207,32 +216,42 @@ export default function LiveMap({
   // Stable dependency key (a deps array must keep a constant size across renders).
   const routeKey = JSON.stringify({ route, roadFrom, roadTo });
 
-  // Sync route line. When roadFrom/roadTo are given, fetch the actual by-road
-  // driving path; otherwise draw the explicit `route`. Waits for the style.
+  // Sync the direction line. When roadFrom/roadTo are given, draw a straight
+  // A→B line; otherwise draw the explicit `route`.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     let cancelled = false;
 
-    async function resolve(): Promise<Array<[number, number]> | undefined> {
-      if (
-        roadFrom &&
-        roadTo &&
-        isValidLngLat(roadFrom[0], roadFrom[1]) &&
-        isValidLngLat(roadTo[0], roadTo[1])
-      ) {
-        return roadRoute(roadFrom, roadTo);
-      }
-      return route;
+    const coords: Array<[number, number]> | undefined =
+      roadFrom &&
+      roadTo &&
+      isValidLngLat(roadFrom[0], roadFrom[1]) &&
+      isValidLngLat(roadTo[0], roadTo[1])
+        ? [roadFrom, roadTo]
+        : route;
+
+    const apply = () => {
+      if (!cancelled && mapRef.current) setRouteLine(map, coords);
+    };
+
+    // addSource/addLayer need a loaded style. Gating on once("load") can miss
+    // when the style already loaded, so poll via styledata until ready.
+    if (map.isStyleLoaded()) {
+      apply();
+    } else {
+      const onData = () => {
+        if (map.isStyleLoaded()) {
+          map.off("styledata", onData);
+          apply();
+        }
+      };
+      map.on("styledata", onData);
+      return () => {
+        cancelled = true;
+        map.off("styledata", onData);
+      };
     }
-
-    resolve().then((coords) => {
-      if (cancelled || !mapRef.current) return;
-      const apply = () => setRouteLine(map, coords);
-      if (map.isStyleLoaded()) apply();
-      else map.once("load", apply);
-    });
-
     return () => {
       cancelled = true;
     };
