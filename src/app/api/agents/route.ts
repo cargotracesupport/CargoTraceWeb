@@ -104,6 +104,7 @@ export async function PATCH(req: Request) {
   const fullName = String(body.fullName ?? "").trim();
   const phone = body.phone ? String(body.phone).trim() : null;
   const email = body.email ? String(body.email).trim() : "";
+  const password = body.password ? String(body.password) : "";
   if (!id || !fullName) {
     return NextResponse.json(
       { error: "id and fullName required" },
@@ -113,9 +114,15 @@ export async function PATCH(req: Request) {
   if (fullName.length > 120) {
     return NextResponse.json({ error: "name too long" }, { status: 400 });
   }
-  // Email is the login — validate before we touch the auth account.
+  // Email + password are login credentials — validate before touching auth.
   if (email && (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
     return NextResponse.json({ error: "invalid email" }, { status: 400 });
+  }
+  if (password && password.length < 6) {
+    return NextResponse.json(
+      { error: "password must be at least 6 characters" },
+      { status: 400 },
+    );
   }
 
   const admin = createAdminClient();
@@ -143,17 +150,21 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "could not update agent" }, { status: 400 });
   }
 
-  // Update the login email on the auth account if one was provided. Kept
-  // confirmed so the agent can sign in immediately with the new address.
+  // Update login credentials (email and/or password) on the auth account when
+  // provided. Email kept confirmed so they can sign in immediately.
+  const authUpdate: { email?: string; email_confirm?: boolean; password?: string } =
+    {};
   if (email) {
-    const { error: authErr } = await admin.auth.admin.updateUserById(id, {
-      email,
-      email_confirm: true,
-    });
+    authUpdate.email = email;
+    authUpdate.email_confirm = true;
+  }
+  if (password) authUpdate.password = password;
+  if (Object.keys(authUpdate).length > 0) {
+    const { error: authErr } = await admin.auth.admin.updateUserById(id, authUpdate);
     if (authErr) {
-      console.error("agent email update failed:", authErr.message);
+      console.error("agent credential update failed:", authErr.message);
       return NextResponse.json(
-        { error: authErr.message || "could not update email" },
+        { error: authErr.message || "could not update login" },
         { status: 400 },
       );
     }

@@ -299,6 +299,7 @@ function PersonRow({
   const [fullName, setFullName] = useState(person.full_name ?? "");
   const [phone, setPhone] = useState(person.phone ?? "");
   const [email, setEmail] = useState(initialEmail ?? "");
+  const [password, setPassword] = useState("");
   const [vehicleId, setVehicleId] = useState(person.vehicle_id ?? "");
   const [ownerAgentId, setOwnerAgentId] = useState(person.agent_id ?? "");
   const canEditEmail = initialEmail !== undefined;
@@ -314,6 +315,7 @@ function PersonRow({
     setFullName(person.full_name ?? "");
     setPhone(person.phone ?? "");
     setEmail(initialEmail ?? "");
+    setPassword("");
     setVehicleId(person.vehicle_id ?? "");
     setOwnerAgentId(person.agent_id ?? "");
     setError(null);
@@ -332,6 +334,7 @@ function PersonRow({
           fullName: fullName.trim(),
           phone: phone.trim() || undefined,
           ...(canEditEmail ? { email: email.trim() } : {}),
+          ...(password.trim() ? { password: password.trim() } : {}),
           ...(vehicles ? { vehicleId } : {}),
           ...(agents ? { agentId: ownerAgentId } : {}),
         }),
@@ -381,6 +384,16 @@ function PersonRow({
               aria-label="Login email"
             />
           ) : null}
+          <input
+            type="text"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="New password (leave blank to keep)"
+            minLength={6}
+            className="ct-input font-mono"
+            aria-label="New password"
+            autoComplete="new-password"
+          />
           {/* Drivers additionally pick a vehicle */}
           {vehicles ? (
             <>
