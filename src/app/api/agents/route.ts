@@ -103,6 +103,7 @@ export async function PATCH(req: Request) {
   const id = String(body.id ?? "");
   const fullName = String(body.fullName ?? "").trim();
   const phone = body.phone ? String(body.phone).trim() : null;
+  const email = body.email ? String(body.email).trim() : "";
   if (!id || !fullName) {
     return NextResponse.json(
       { error: "id and fullName required" },
@@ -111,6 +112,10 @@ export async function PATCH(req: Request) {
   }
   if (fullName.length > 120) {
     return NextResponse.json({ error: "name too long" }, { status: 400 });
+  }
+  // Email is the login — validate before we touch the auth account.
+  if (email && (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+    return NextResponse.json({ error: "invalid email" }, { status: 400 });
   }
 
   const admin = createAdminClient();
@@ -136,6 +141,22 @@ export async function PATCH(req: Request) {
   if (error) {
     console.error("agent PATCH failed:", error.message);
     return NextResponse.json({ error: "could not update agent" }, { status: 400 });
+  }
+
+  // Update the login email on the auth account if one was provided. Kept
+  // confirmed so the agent can sign in immediately with the new address.
+  if (email) {
+    const { error: authErr } = await admin.auth.admin.updateUserById(id, {
+      email,
+      email_confirm: true,
+    });
+    if (authErr) {
+      console.error("agent email update failed:", authErr.message);
+      return NextResponse.json(
+        { error: authErr.message || "could not update email" },
+        { status: 400 },
+      );
+    }
   }
 
   return NextResponse.json({ ok: true });

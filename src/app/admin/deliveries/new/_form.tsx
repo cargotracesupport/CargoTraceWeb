@@ -4,9 +4,26 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import type { Profile, Vehicle, Device, Delivery } from "@/lib/types";
+import type {
+  Profile,
+  Vehicle,
+  Device,
+  Delivery,
+  DeliveryStatus,
+} from "@/lib/types";
+import { STATUS_LABEL } from "@/lib/types";
 import LocationPicker, { type LatLng } from "@/components/LocationPicker";
 import Spinner from "@/components/Spinner";
+
+// Statuses an admin can set by hand when editing a delivery.
+const EDITABLE_STATUSES: DeliveryStatus[] = [
+  "awaiting_dropoff",
+  "pending",
+  "assigned",
+  "en_route",
+  "delivered",
+  "cancelled",
+];
 
 interface Created {
   token: string;
@@ -118,6 +135,10 @@ export default function NewDeliveryForm({
   const [driverId, setDriverId] = useState(delivery?.driver_id ?? "");
   const [vehicleId, setVehicleId] = useState(delivery?.vehicle_id ?? "");
   const [deviceId, setDeviceId] = useState(delivery?.device_id ?? "");
+  // Admin-only, edit-only: set the status by hand.
+  const [status, setStatus] = useState<DeliveryStatus>(
+    delivery?.status ?? "awaiting_dropoff",
+  );
 
   // For the driver picker: { driver_id -> the active delivery they're on }.
   // Only en_route / assigned count as busy; the delivery being edited is excluded.
@@ -227,17 +248,32 @@ export default function NewDeliveryForm({
 
     // ── Edit: update in place, then back to the list ──────────────
     if (editing && delivery) {
-      const patch: Record<string, unknown> = { ...fields };
-      // Only re-derive status while the delivery hasn't started moving.
-      if (delivery.status === "pending" || delivery.status === "assigned") {
-        patch.status = driverId ? "assigned" : "pending";
-        patch.assigned_at = driverId
-          ? (delivery.assigned_at ?? new Date().toISOString())
-          : null;
-      } else if (delivery.status === "awaiting_dropoff") {
-        patch.assigned_at = driverId
-          ? (delivery.assigned_at ?? new Date().toISOString())
-          : null;
+      const now = new Date().toISOString();
+      const keep = (v: string | null) => v ?? now; // preserve original, else stamp now
+      // The admin sets the status explicitly. Keep the lifecycle timestamps
+      // COHERENT with the chosen status — clear ones that no longer apply so a
+      // delivery can't be e.g. "en_route" while still carrying a delivered_at.
+      const patch: Record<string, unknown> = { ...fields, status };
+      if (status === "delivered") {
+        patch.assigned_at = keep(delivery.assigned_at);
+        patch.started_at = keep(delivery.started_at);
+        patch.delivered_at = keep(delivery.delivered_at);
+      } else if (status === "en_route") {
+        patch.assigned_at = keep(delivery.assigned_at);
+        patch.started_at = keep(delivery.started_at);
+        patch.delivered_at = null;
+      } else if (status === "assigned") {
+        patch.assigned_at = keep(delivery.assigned_at);
+        patch.started_at = null;
+        patch.delivered_at = null;
+      } else if (status === "cancelled") {
+        // Terminal — keep any assigned/started history, but it's not delivered.
+        patch.delivered_at = null;
+      } else {
+        // awaiting_dropoff / pending — not started yet.
+        patch.assigned_at = driverId ? keep(delivery.assigned_at) : null;
+        patch.started_at = null;
+        patch.delivered_at = null;
       }
       const { error: err } = await supabase
         .from("deliveries")
@@ -419,22 +455,31 @@ export default function NewDeliveryForm({
         </div>
       </fieldset>
 
-      {/* Pick the pickup on the map (the customer sets the drop-off later) */}
+      {/* Map: pickup only on create (customer sets drop-off); both when editing */}
       <fieldset className="ct-card flex flex-col gap-4 p-5">
         <legend className="px-1 text-sm font-semibold">
-          Pickup location on the map
+          {editing ? "Locations on the map" : "Pickup location on the map"}
         </legend>
         <LocationPicker
           origin={parsePoint(originLat, originLng)}
-          dest={null}
+          dest={editing ? parsePoint(destLat, destLng) : null}
           onPick={handlePick}
-          mode="origin"
+          mode={editing ? "both" : "origin"}
         />
-        <p className="rounded-lg bg-s2 px-3 py-2 text-xs text-muted2">
-          The <span className="font-medium text-text">drop-off location</span> is
-          set by the customer from the link they receive — it can&rsquo;t be
-          entered here.
-        </p>
+        {editing ? (
+          <p className="rounded-lg bg-s2 px-3 py-2 text-xs text-muted2">
+            Tap the map to set the{" "}
+            <span className="font-medium text-blue">pickup</span> and{" "}
+            <span className="font-medium text-green">drop-off</span> pins, or type
+            coordinates below.
+          </p>
+        ) : (
+          <p className="rounded-lg bg-s2 px-3 py-2 text-xs text-muted2">
+            The <span className="font-medium text-text">drop-off location</span> is
+            set by the customer from the link they receive — it can&rsquo;t be
+            entered here.
+          </p>
+        )}
       </fieldset>
 
       {/* Origin */}
@@ -489,6 +534,56 @@ export default function NewDeliveryForm({
         </p>
       </fieldset>
 
+      {/* Destination (drop-off) — editable by admin when editing */}
+      {editing ? (
+        <fieldset className="ct-card flex flex-col gap-4 p-5">
+          <legend className="px-1 text-sm font-semibold">
+            Destination (drop-off)
+          </legend>
+          <div>
+            <label className="ct-label" htmlFor="dest_label">
+              Label
+            </label>
+            <input
+              id="dest_label"
+              value={destLabel}
+              onChange={(e) => setDestLabel(e.target.value)}
+              placeholder="e.g. Customer doorstep"
+              className="ct-input"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="ct-label" htmlFor="dest_lat">
+                Latitude
+              </label>
+              <input
+                id="dest_lat"
+                inputMode="decimal"
+                value={destLat}
+                onChange={(e) =>
+                  handleLatPaste(e.target.value, setDestLat, setDestLng)
+                }
+                placeholder="14.5995"
+                className="ct-input font-mono"
+              />
+            </div>
+            <div>
+              <label className="ct-label" htmlFor="dest_lng">
+                Longitude
+              </label>
+              <input
+                id="dest_lng"
+                inputMode="decimal"
+                value={destLng}
+                onChange={(e) => setDestLng(e.target.value)}
+                placeholder="120.9842"
+                className="ct-input font-mono"
+              />
+            </div>
+          </div>
+        </fieldset>
+      ) : null}
 
       {/* Customer */}
       <fieldset className="ct-card flex flex-col gap-4 p-5">
@@ -589,12 +684,18 @@ export default function NewDeliveryForm({
             <select
               id="vehicle"
               value={vehicleId}
-              onChange={() => {}}
-              disabled
-              title="Vehicle is set from the driver — edit it on the driver"
-              className="ct-input cursor-not-allowed"
+              onChange={editing ? (e) => setVehicleId(e.target.value) : () => {}}
+              disabled={!editing}
+              title={
+                editing
+                  ? "Vehicle for this delivery"
+                  : "Vehicle is set from the driver — edit it on the driver"
+              }
+              className={`ct-input ${editing ? "" : "cursor-not-allowed"}`}
             >
-              <option value="">— vehicle from driver —</option>
+              <option value="">
+                {editing ? "Unassigned" : "— vehicle from driver —"}
+              </option>
               {vehicles.map((v) => (
                 <option key={v.id} value={v.id}>
                   {v.name}
@@ -603,7 +704,9 @@ export default function NewDeliveryForm({
               ))}
             </select>
             <p className="mt-1 text-xs text-muted">
-              Set from the chosen driver. To change it, edit the driver.
+              {editing
+                ? "Auto-filled from the driver; change it here if needed."
+                : "Set from the chosen driver. To change it, edit the driver."}
             </p>
           </div>
           <div>
@@ -625,12 +728,42 @@ export default function NewDeliveryForm({
             </select>
           </div>
         </div>
-        <p className="text-xs text-muted">
-          Assigning a driver sets the status to{" "}
-          <span className="text-blue">Assigned</span>; otherwise it stays{" "}
-          <span className="text-muted2">Pending</span>.
-        </p>
+        {!editing ? (
+          <p className="text-xs text-muted">
+            Assigning a driver sets the status to{" "}
+            <span className="text-blue">Assigned</span>; otherwise it stays{" "}
+            <span className="text-muted2">Pending</span>.
+          </p>
+        ) : null}
       </fieldset>
+
+      {/* Status — admin sets it directly when editing */}
+      {editing ? (
+        <fieldset className="ct-card flex flex-col gap-3 p-5">
+          <legend className="px-1 text-sm font-semibold">Status</legend>
+          <div>
+            <label className="ct-label" htmlFor="status">
+              Delivery status
+            </label>
+            <select
+              id="status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as DeliveryStatus)}
+              className="ct-input"
+            >
+              {EDITABLE_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted">
+              Set the status manually. Lifecycle timestamps are filled in
+              automatically when you move it forward.
+            </p>
+          </div>
+        </fieldset>
+      ) : null}
 
       {error ? (
         <p className="rounded-md border border-red/40 bg-red/10 px-3 py-2 text-sm text-red">

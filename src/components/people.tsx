@@ -35,6 +35,7 @@ export function PeopleCard({
   deleteConfirm,
   vehicles,
   agents,
+  emails,
 }: {
   title: string;
   people: Profile[];
@@ -48,6 +49,8 @@ export function PeopleCard({
   vehicles?: VehicleLite[];
   // Admin context: assign an owning agent (shows an owner picker + owner column).
   agents?: AgentLite[];
+  // Login emails by person id — when provided, the edit form lets you change it.
+  emails?: Record<string, string>;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -261,6 +264,7 @@ export function PeopleCard({
               vehicles={vehicles}
               assignedIds={assignedIds}
               agents={agents}
+              email={emails?.[p.id]}
             />
           ))}
         </ul>
@@ -277,6 +281,7 @@ function PersonRow({
   vehicles,
   assignedIds,
   agents,
+  email: initialEmail,
 }: {
   person: Profile;
   endpoint: string;
@@ -285,6 +290,7 @@ function PersonRow({
   vehicles?: VehicleLite[];
   assignedIds?: Set<string>;
   agents?: AgentLite[];
+  email?: string;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -292,8 +298,10 @@ function PersonRow({
   const [error, setError] = useState<string | null>(null);
   const [fullName, setFullName] = useState(person.full_name ?? "");
   const [phone, setPhone] = useState(person.phone ?? "");
+  const [email, setEmail] = useState(initialEmail ?? "");
   const [vehicleId, setVehicleId] = useState(person.vehicle_id ?? "");
   const [ownerAgentId, setOwnerAgentId] = useState(person.agent_id ?? "");
+  const canEditEmail = initialEmail !== undefined;
 
   const currentVehicle = vehicles?.find((v) => v.id === person.vehicle_id);
   const currentOwner = agents?.find((a) => a.id === person.agent_id);
@@ -305,6 +313,7 @@ function PersonRow({
   function reset() {
     setFullName(person.full_name ?? "");
     setPhone(person.phone ?? "");
+    setEmail(initialEmail ?? "");
     setVehicleId(person.vehicle_id ?? "");
     setOwnerAgentId(person.agent_id ?? "");
     setError(null);
@@ -322,6 +331,7 @@ function PersonRow({
           id: person.id,
           fullName: fullName.trim(),
           phone: phone.trim() || undefined,
+          ...(canEditEmail ? { email: email.trim() } : {}),
           ...(vehicles ? { vehicleId } : {}),
           ...(agents ? { agentId: ownerAgentId } : {}),
         }),
@@ -389,6 +399,16 @@ function PersonRow({
                 className="ct-input"
                 aria-label="Phone"
               />
+              {canEditEmail ? (
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Login email"
+                  className="ct-input"
+                  aria-label="Login email"
+                />
+              ) : null}
             </>
           )}
           {agents ? (
@@ -454,6 +474,9 @@ function PersonRow({
         ) : (
           <p className="text-xs text-muted">No phone</p>
         )}
+        {canEditEmail && initialEmail ? (
+          <p className="truncate text-xs text-muted2">{initialEmail}</p>
+        ) : null}
         {currentVehicle ? (
           <p className="mt-0.5 inline-flex items-center gap-1 font-mono text-xs text-muted2">
             <Truck className="h-3.5 w-3.5" /> {vehLabel(currentVehicle)}

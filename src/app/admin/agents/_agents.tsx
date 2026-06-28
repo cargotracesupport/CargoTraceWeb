@@ -6,12 +6,19 @@ import { UserCog } from "@/components/icons";
 
 // Client wrapper so the PeopleCard icon (a component) stays on the client side —
 // a Server Component can't pass a function/component prop across the boundary.
-export default function AgentsManager({ agents }: { agents: Profile[] }) {
+export default function AgentsManager({
+  agents,
+  emails,
+}: {
+  agents: Profile[];
+  emails?: Record<string, string>;
+}) {
   return (
     <div className="max-w-md">
       <PeopleCard
         title="Agents"
         people={agents}
+        emails={emails}
         endpoint="/api/agents"
         Icon={UserCog}
         idPrefix="agent"
