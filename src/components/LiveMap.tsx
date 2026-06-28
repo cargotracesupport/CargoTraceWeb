@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { mapStyleUrl } from "@/lib/maptiler";
+import { roadRoute } from "@/lib/route";
 
 // Camera tilt (degrees) for the 3D "moving" navigation view — the billboard
 // markers (warehouse, truck) stand upright on the tilted ground plane. Kept on
@@ -88,10 +89,9 @@ function setRouteLine(
       source: ROUTE_SOURCE,
       layout: { "line-cap": "round", "line-join": "round" },
       paint: {
-        "line-color": "#40c4ff",
-        "line-width": 3,
-        "line-dasharray": [2, 1.5],
-        "line-opacity": 0.85,
+        "line-color": "#2f9bd1",
+        "line-width": 4,
+        "line-opacity": 0.9,
       },
     });
   }
@@ -99,8 +99,8 @@ function setRouteLine(
 
 /**
  * Reusable live map. Renders markers (truck / origin / destination) and, when a
- * direction is given, a dashed straight A→B line. Invalid coordinates are ignored
- * so bad data never crashes the map. Used by Admin, Driver and Customer.
+ * direction is given, a solid by-road route line A→B. Invalid coordinates are
+ * ignored so bad data never crashes the map. Used by Admin, Driver and Customer.
  */
 export default function LiveMap({
   markers,
@@ -114,7 +114,7 @@ export default function LiveMap({
 }: {
   markers: MapMarker[];
   route?: Array<[number, number]>;
-  /** When set, the map draws a straight direction line from A→B. */
+  /** When set, the map draws the by-road driving route from A→B (falls back to a line). */
   roadFrom?: [number, number];
   roadTo?: [number, number];
   /** Fly the camera to this point (e.g. a selected driver) instead of fitting all markers. */
@@ -216,42 +216,49 @@ export default function LiveMap({
   // Stable dependency key (a deps array must keep a constant size across renders).
   const routeKey = JSON.stringify({ route, roadFrom, roadTo });
 
-  // Sync the direction line. When roadFrom/roadTo are given, draw a straight
-  // A→B line; otherwise draw the explicit `route`.
+  // Sync the route line. When roadFrom/roadTo are given, fetch the by-road
+  // driving path (falls back to a straight line); otherwise draw `route`.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
     let cancelled = false;
 
-    const coords: Array<[number, number]> | undefined =
-      roadFrom &&
-      roadTo &&
-      isValidLngLat(roadFrom[0], roadFrom[1]) &&
-      isValidLngLat(roadTo[0], roadTo[1])
-        ? [roadFrom, roadTo]
-        : route;
-
-    const apply = () => {
-      if (!cancelled && mapRef.current) setRouteLine(map, coords);
-    };
+    async function resolve(): Promise<Array<[number, number]> | undefined> {
+      if (
+        roadFrom &&
+        roadTo &&
+        isValidLngLat(roadFrom[0], roadFrom[1]) &&
+        isValidLngLat(roadTo[0], roadTo[1])
+      ) {
+        return roadRoute(roadFrom, roadTo);
+      }
+      return route;
+    }
 
     // addSource/addLayer need a loaded style. Gating on once("load") can miss
     // when the style already loaded, so poll via styledata until ready.
-    if (map.isStyleLoaded()) {
-      apply();
-    } else {
+    function whenStyleReady(cb: () => void) {
+      if (!map) return;
+      if (map.isStyleLoaded()) {
+        cb();
+        return;
+      }
       const onData = () => {
         if (map.isStyleLoaded()) {
           map.off("styledata", onData);
-          apply();
+          cb();
         }
       };
       map.on("styledata", onData);
-      return () => {
-        cancelled = true;
-        map.off("styledata", onData);
-      };
     }
+
+    resolve().then((coords) => {
+      if (cancelled || !mapRef.current) return;
+      whenStyleReady(() => {
+        if (!cancelled && mapRef.current) setRouteLine(map, coords);
+      });
+    });
+
     return () => {
       cancelled = true;
     };
