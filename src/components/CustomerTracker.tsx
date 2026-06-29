@@ -29,7 +29,9 @@ export interface PublicDelivery {
   vehicle?: { plate: string | null; name: string | null } | null;
 }
 
-const POLL_MS = 5000;
+// Customers can't use Supabase realtime (anon, RLS-gated), so we poll. Keep it
+// snappy so the driver's live position feels real-time.
+const POLL_MS = 3000;
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "";

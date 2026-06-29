@@ -1,9 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import LocationPicker, { type LatLng } from "@/components/LocationPicker";
 import Spinner from "@/components/Spinner";
 import { MapPin } from "@/components/icons";
+
+// Remember the verified number per delivery so a returning customer isn't asked
+// for it again. It's their own number on their own device; the link token is the
+// real credential, and the server re-checks the number on the actual drop-off.
+const phoneKey = (token: string) => `ct_track_phone:${token}`;
 
 /**
  * Customer sets their own drop-off location. Step 1: confirm the mobile number
@@ -24,6 +29,20 @@ export default function DropoffSetter({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Returning customer: restore their remembered number and skip the login step.
+  // The drop-off POST below still re-verifies it server-side.
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(phoneKey(token));
+      if (saved) {
+        setPhone(saved);
+        setVerified(true);
+      }
+    } catch {
+      /* storage unavailable — fall back to asking */
+    }
+  }, [token]);
+
   async function call(extra: Record<string, unknown>) {
     const res = await fetch(`/api/deliveries/${token}/dropoff`, {
       method: "POST",
@@ -41,6 +60,11 @@ export default function DropoffSetter({
     setBusy(true);
     try {
       await call({});
+      try {
+        localStorage.setItem(phoneKey(token), phone);
+      } catch {
+        /* ignore — remembering is best-effort */
+      }
       setVerified(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not verify.");
@@ -114,11 +138,31 @@ export default function DropoffSetter({
     );
   }
 
+  function useDifferentNumber() {
+    try {
+      localStorage.removeItem(phoneKey(token));
+    } catch {
+      /* ignore */
+    }
+    setPhone("");
+    setVerified(false);
+    setError(null);
+  }
+
   return (
     <section className="ct-card p-5">
-      <h2 className="text-lg font-bold tracking-tight">
-        Where should we drop it off?
-      </h2>
+      <div className="flex items-start justify-between gap-2">
+        <h2 className="text-lg font-bold tracking-tight">
+          Where should we drop it off?
+        </h2>
+        <button
+          type="button"
+          onClick={useDifferentNumber}
+          className="shrink-0 text-xs text-muted2 underline hover:text-text"
+        >
+          Use a different number
+        </button>
+      </div>
       <p className="mt-1 text-sm text-muted2">
         Tap the map to set your exact drop-off point (or search an address), then
         confirm.
