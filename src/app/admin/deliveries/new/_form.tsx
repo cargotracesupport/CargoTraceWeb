@@ -635,7 +635,9 @@ export default function NewDeliveryForm({
         </div>
       </fieldset>
 
-      {/* Assignment */}
+      {/* Assignment — edit-only. New deliveries get their driver AFTER the
+          customer sets the drop-off, assigned from the dispatch board. */}
+      {editing ? (
       <fieldset className="ct-card flex flex-col gap-4 p-5">
         <legend className="px-1 text-sm font-semibold">Assignment</legend>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -728,14 +730,17 @@ export default function NewDeliveryForm({
             </select>
           </div>
         </div>
-        {!editing ? (
-          <p className="text-xs text-muted">
-            Assigning a driver sets the status to{" "}
-            <span className="text-blue">Assigned</span>; otherwise it stays{" "}
-            <span className="text-muted2">Pending</span>.
-          </p>
-        ) : null}
       </fieldset>
+      ) : null}
+
+      {/* On create, tell the dispatcher what happens next. */}
+      {!editing ? (
+        <p className="rounded-lg bg-s2 px-3 py-2 text-xs text-muted2">
+          No driver is chosen now. Once the customer sets their drop-off, this
+          delivery becomes ready to assign on the dispatch board — where you can
+          put several same-route deliveries on one driver.
+        </p>
+      ) : null}
 
       {/* Status — admin sets it directly when editing */}
       {editing ? (

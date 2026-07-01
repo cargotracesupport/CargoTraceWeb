@@ -7,6 +7,7 @@ import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import Spinner from "@/components/Spinner";
 import Link from "next/link";
 import { Avatar, MapPin, Flag, Package, Check, Search, Truck, Plus } from "@/components/icons";
+import { groupSameRoute } from "@/lib/cluster";
 
 export type DriverOption = {
   id: string;
@@ -107,13 +108,41 @@ export default function AssignConsole({
     );
   }, [rows, query]);
 
-  const needsDriver = filtered.filter(
-    (r) => !r.driver_id && !DONE.has(r.status),
+  // New flow: no driver until the customer sets a drop-off.
+  //  • awaiting_dropoff → waiting on the customer (not assignable yet)
+  //  • pending w/ drop-off + no driver → READY to assign (grouped by route)
+  const waitingDropoff = filtered.filter(
+    (r) => r.status === "awaiting_dropoff",
+  );
+  const ready = filtered.filter(
+    (r) =>
+      !r.driver_id &&
+      r.status === "pending" &&
+      r.dest_lat != null &&
+      r.dest_lng != null,
   );
   const active = filtered.filter(
     (r) => r.driver_id && !DONE.has(r.status),
   );
   const done = filtered.filter((r) => DONE.has(r.status));
+
+  // Cluster the ready deliveries into same-route groups (proximity-based).
+  // Deliveries missing a pickup coordinate can't be clustered → own group.
+  const routeGroups = useMemo(() => {
+    const withPts = ready
+      .filter((r) => r.origin_lat != null && r.origin_lng != null)
+      .map((r) => ({
+        delivery: r,
+        origin: { lat: r.origin_lat as number, lng: r.origin_lng as number },
+        dest: { lat: r.dest_lat as number, lng: r.dest_lng as number },
+      }));
+    const grouped = groupSameRoute(withPts).map((g) => g.map((x) => x.delivery));
+    const singles = ready
+      .filter((r) => r.origin_lat == null || r.origin_lng == null)
+      .map((r) => [r]);
+    return [...grouped, ...singles];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(ready.map((r) => [r.id, r.origin_lat, r.dest_lat]))]);
 
   const patchRow = useCallback((row: Delivery) => {
     setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
@@ -177,24 +206,20 @@ export default function AssignConsole({
       </div>
 
       {unassignedOnly ? (
-        <Section
-          title="Needs a driver & vehicle"
-          count={needsDriver.length}
-          empty="No unassigned orders — every active delivery has a driver."
-        >
-          {needsDriver.map((d) => (
-            <DeliveryRow
-              key={d.id}
-              delivery={d}
-              drivers={drivers}
-              vehicles={vehicles}
-              driverName={driverName}
-              vehicleLabel={vehicleLabel}
-              busyByDriver={busyByDriver}
-              onAssigned={patchRow}
-            />
-          ))}
-        </Section>
+        <>
+          <ReadyToAssign
+            groups={routeGroups}
+            drivers={drivers}
+            busyByDriver={busyByDriver}
+            onAssigned={patchRow}
+          />
+          <WaitingForDropoff deliveries={waitingDropoff} />
+          {routeGroups.length === 0 && waitingDropoff.length === 0 ? (
+            <Section title="Needs a driver" count={0} empty="Nothing waiting to assign — every drop-off is set and assigned.">
+              {null}
+            </Section>
+          ) : null}
+        </>
       ) : rows.length === 0 ? (
         <div className="ct-card flex flex-col items-center gap-2 px-5 py-16 text-center">
           <Package className="h-6 w-6 text-muted2" />
@@ -204,6 +229,13 @@ export default function AssignConsole({
         </div>
       ) : (
         <>
+          <ReadyToAssign
+            groups={routeGroups}
+            drivers={drivers}
+            busyByDriver={busyByDriver}
+            onAssigned={patchRow}
+          />
+          <WaitingForDropoff deliveries={waitingDropoff} />
           <Section
             title="Assigned & en route"
             count={active.length}
@@ -242,6 +274,193 @@ export default function AssignConsole({
         </>
       )}
     </div>
+  );
+}
+
+/* ── Ready to assign: same-route groups + one-tap batch assign ──────────── */
+
+function ReadyToAssign({
+  groups,
+  drivers,
+  busyByDriver,
+  onAssigned,
+}: {
+  groups: Delivery[][];
+  drivers: DriverOption[];
+  busyByDriver: Map<
+    string,
+    { status: string; reference: string | null; deliveryId: string }
+  >;
+  onAssigned: (row: Delivery) => void;
+}) {
+  const total = groups.reduce((n, g) => n + g.length, 0);
+  if (total === 0) return null;
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-sm font-semibold">
+          Ready to assign{" "}
+          <span className="ct-pill bg-amber/10 text-amber">{total}</span>
+        </h2>
+        <span className="text-xs text-muted2">
+          {groups.length} route group{groups.length > 1 ? "s" : ""}
+        </span>
+      </div>
+      <p className="px-1 text-xs text-muted2">
+        Drop-off is set — grouped by route. Put same-route deliveries on one
+        driver.
+      </p>
+      {groups.map((g, i) => (
+        <RouteGroupCard
+          key={g[0].id + ":" + i}
+          group={g}
+          drivers={drivers}
+          busyByDriver={busyByDriver}
+          onAssigned={onAssigned}
+        />
+      ))}
+    </section>
+  );
+}
+
+function RouteGroupCard({
+  group,
+  drivers,
+  busyByDriver,
+  onAssigned,
+}: {
+  group: Delivery[];
+  drivers: DriverOption[];
+  busyByDriver: Map<
+    string,
+    { status: string; reference: string | null; deliveryId: string }
+  >;
+  onAssigned: (row: Delivery) => void;
+}) {
+  const [driverId, setDriverId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [doneCount, setDoneCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  const driver = drivers.find((d) => d.id === driverId);
+
+  async function assignAll() {
+    if (!driverId) {
+      setError("Pick a driver for this route.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setDoneCount(0);
+    const supabase = createClient();
+    const vehicleId = driver?.vehicle_id ?? null;
+    const errs: string[] = [];
+    let ok = 0;
+    for (const d of group) {
+      const { data, error: err } = await supabase.rpc(
+        "assign_delivery_to_driver",
+        { p_delivery_id: d.id, p_driver_id: driverId, p_vehicle_id: vehicleId },
+      );
+      if (err) errs.push(`${d.reference ?? "delivery"}: ${err.message}`);
+      else {
+        ok++;
+        setDoneCount(ok);
+        if (data) onAssigned(data as Delivery);
+      }
+    }
+    setBusy(false);
+    if (errs.length) setError(errs.join(" · "));
+  }
+
+  return (
+    <div className="ct-card flex flex-col gap-3 p-4">
+      <ul className="flex flex-col gap-1.5">
+        {group.map((d) => (
+          <li
+            key={d.id}
+            className="flex items-center justify-between gap-2 text-xs"
+          >
+            <span className="shrink-0 font-mono font-medium text-primary">
+              {d.reference ?? "—"}
+            </span>
+            <span className="inline-flex min-w-0 items-center gap-1 text-muted2">
+              <Flag className="h-3 w-3 shrink-0 text-accent" />
+              <span className="truncate">{d.dest_label ?? "Drop-off"}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={driverId}
+          onChange={(e) => setDriverId(e.target.value)}
+          className="ct-input min-w-[160px] flex-1"
+          aria-label="Assign route to driver"
+        >
+          <option value="">— Assign to driver —</option>
+          {drivers.map((d) => {
+            const b = busyByDriver.get(d.id);
+            const suffix = b
+              ? b.status === "en_route"
+                ? ` — On the road · ${b.reference ?? "trip"}`
+                : ` — On ${b.reference ?? "trip"}`
+              : " — Available";
+            return (
+              <option key={d.id} value={d.id}>
+                {(d.full_name ?? "Driver") + suffix}
+              </option>
+            );
+          })}
+        </select>
+        <button
+          type="button"
+          disabled={busy || !driverId}
+          onClick={assignAll}
+          className="ct-btn-primary disabled:opacity-60"
+        >
+          {busy ? (
+            <>
+              <Spinner /> Assigning {doneCount}/{group.length}…
+            </>
+          ) : (
+            `Assign ${group.length} to driver`
+          )}
+        </button>
+      </div>
+      {error ? <p className="text-xs text-red">{error}</p> : null}
+    </div>
+  );
+}
+
+/* ── Waiting for the customer to set their drop-off ─────────────────────── */
+
+function WaitingForDropoff({ deliveries }: { deliveries: Delivery[] }) {
+  if (deliveries.length === 0) return null;
+  return (
+    <Section title="Waiting for drop-off" count={deliveries.length}>
+      {deliveries.map((d) => (
+        <div
+          key={d.id}
+          className="ct-card flex items-start justify-between gap-3 p-4"
+        >
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm font-medium text-primary">
+                {d.reference ?? "—"}
+              </span>
+              <DeliveryStatusBadge status={d.status} />
+            </div>
+            <p className="mt-1 truncate text-sm text-text">
+              {d.goods ?? "Delivery"}
+            </p>
+            <p className="mt-1 text-xs text-muted2">
+              {d.customer_name ?? "Customer"} · waiting for them to set the
+              drop-off before you can assign a driver.
+            </p>
+          </div>
+        </div>
+      ))}
+    </Section>
   );
 }
 
