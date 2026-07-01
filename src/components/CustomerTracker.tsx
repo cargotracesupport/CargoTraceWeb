@@ -297,6 +297,29 @@ export default function CustomerTracker({
           )}
         </section>
 
+        {/* Drop-off is set but no driver yet — reassure the customer. */}
+        {!delivery.driver?.full_name &&
+        !needsDropoff &&
+        !isDelivered &&
+        status !== "cancelled" ? (
+          <section className="ct-card p-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber/10 text-amber">
+                <Truck className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-sm font-semibold">
+                  A driver will be assigned soon
+                </p>
+                <p className="mt-0.5 text-xs text-muted2">
+                  Your drop-off is set. We&rsquo;re assigning a driver — you&rsquo;ll
+                  see them and their live location here the moment they start.
+                </p>
+              </div>
+            </div>
+          </section>
+        ) : null}
+
         {/* Driver card — surfaced once the customer has set drop-off */}
         {delivery.driver?.full_name ? (
           <section className="ct-card p-5">

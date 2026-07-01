@@ -137,5 +137,21 @@ export async function POST(req: Request) {
     .eq("id", delivery.id)
     .in("status", ["pending", "assigned"]);
 
+  // Multi-stop trip: one GPS ping moves the truck for ALL of this driver's other
+  // in-progress stops too, so every grouped customer sees the driver moving.
+  if (delivery.driver_id) {
+    await supabase
+      .from("deliveries")
+      .update({
+        last_lat: lat,
+        last_lng: lng,
+        last_speed: speed,
+        last_position_at: recordedAt,
+      })
+      .eq("driver_id", delivery.driver_id)
+      .eq("status", "en_route")
+      .neq("id", delivery.id);
+  }
+
   return NextResponse.json({ ok: true, delivery: delivery.id });
 }
