@@ -6,8 +6,24 @@ import type { Delivery } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import Spinner from "@/components/Spinner";
 import Link from "next/link";
-import { Avatar, MapPin, Flag, Package, Check, Search, Truck, Plus } from "@/components/icons";
+import { Avatar, MapPin, Flag, Package, Check, Search, Truck, Plus, Pencil } from "@/components/icons";
 import { groupSameRoute } from "@/lib/cluster";
+
+// Details are editable only until the trip starts (matches the DB freeze).
+const CAN_EDIT = new Set(["awaiting_dropoff", "pending", "assigned"]);
+
+function EditLink({ id, status }: { id: string; status: string }) {
+  if (!CAN_EDIT.has(status)) return null;
+  return (
+    <Link
+      href={`/agent/deliveries/${id}/edit`}
+      className="ct-btn-ghost px-2 py-1 text-xs"
+      title="Edit delivery"
+    >
+      <Pencil className="h-3.5 w-3.5" /> Edit
+    </Link>
+  );
+}
 
 export type DriverOption = {
   id: string;
@@ -380,8 +396,17 @@ function RouteGroupCard({
             key={d.id}
             className="flex items-center justify-between gap-2 text-xs"
           >
-            <span className="shrink-0 font-mono font-medium text-primary">
-              {d.reference ?? "—"}
+            <span className="inline-flex shrink-0 items-center gap-1.5">
+              <span className="font-mono font-medium text-primary">
+                {d.reference ?? "—"}
+              </span>
+              <Link
+                href={`/agent/deliveries/${d.id}/edit`}
+                className="text-muted2 underline hover:text-text"
+                title="Edit delivery"
+              >
+                edit
+              </Link>
             </span>
             <span className="inline-flex min-w-0 items-center gap-1 text-muted2">
               <Flag className="h-3 w-3 shrink-0 text-accent" />
@@ -449,6 +474,7 @@ function WaitingForDropoff({ deliveries }: { deliveries: Delivery[] }) {
                 {d.reference ?? "—"}
               </span>
               <DeliveryStatusBadge status={d.status} />
+              <EditLink id={d.id} status={d.status} />
             </div>
             <p className="mt-1 truncate text-sm text-text">
               {d.goods ?? "Delivery"}
@@ -538,6 +564,7 @@ function DeliveryRow({
               {delivery.reference ?? "—"}
             </span>
             <DeliveryStatusBadge status={delivery.status} />
+            <EditLink id={delivery.id} status={delivery.status} />
           </div>
           <p className="mt-1 truncate text-sm text-text">
             {delivery.goods ?? "Delivery"}

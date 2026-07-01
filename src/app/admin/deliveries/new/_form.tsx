@@ -393,6 +393,48 @@ export default function NewDeliveryForm({
     );
   }
 
+  // Once a delivery has started (or finished), its details are frozen — the DB
+  // enforces this too. Show a locked view instead of the editable form.
+  const started =
+    editing &&
+    !!delivery &&
+    ["en_route", "delivered", "cancelled"].includes(delivery.status);
+  if (started && delivery) {
+    return (
+      <div className="ct-card flex flex-col gap-3 p-6">
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-sm font-medium text-primary">
+            {delivery.reference ?? "—"}
+          </span>
+          <span className="ct-pill bg-s3 text-muted2">
+            {delivery.status.replace("_", " ")}
+          </span>
+        </div>
+        <h2 className="text-base font-semibold">
+          This delivery has already started
+        </h2>
+        <p className="text-sm text-muted2">
+          Details are locked once a driver starts the trip — you can no longer
+          change the pickup, drop-off, customer, or assignment. You can still
+          track it live.
+        </p>
+        <div className="flex gap-2">
+          <Link href={backHref} className="ct-btn-ghost">
+            Back
+          </Link>
+          <Link
+            href={`/track/${delivery.tracking_token}`}
+            target="_blank"
+            rel="noreferrer"
+            className="ct-btn-ghost"
+          >
+            Track live
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       {/* Owning agent (admin chooses who handles this delivery) */}
