@@ -54,8 +54,29 @@ export default function DropoffSetter({
       body: JSON.stringify({ phone, ...extra }),
     });
     const j = (await res.json().catch(() => null)) as { error?: string } | null;
-    if (!res.ok) throw new Error(j?.error ?? `Failed (${res.status})`);
+    if (!res.ok) {
+      const err = new Error(j?.error ?? `Failed (${res.status})`) as Error & {
+        status?: number;
+      };
+      err.status = res.status;
+      throw err;
+    }
     return j;
+  }
+
+  // The number no longer matches (e.g. admin/agent changed it): forget the
+  // remembered one and send the customer back to the number step.
+  function numberChanged() {
+    try {
+      localStorage.removeItem(phoneKey(token));
+    } catch {
+      /* ignore */
+    }
+    setPhone("");
+    setVerified(false);
+    setError(
+      "The mobile number for this delivery has changed. Please enter the current number.",
+    );
   }
 
   async function verify(e: React.FormEvent) {
@@ -71,7 +92,9 @@ export default function DropoffSetter({
       }
       setVerified(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not verify.");
+      const status = (err as { status?: number })?.status;
+      if (status === 403) numberChanged();
+      else setError(err instanceof Error ? err.message : "Could not verify.");
     } finally {
       setBusy(false);
     }
@@ -92,7 +115,10 @@ export default function DropoffSetter({
       // (the API now 409s on a silent no-op). Flip the tracker view immediately.
       onSaved?.(point.lat, point.lng, lbl || null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save.");
+      const status = (err as { status?: number })?.status;
+      // Remembered number stopped matching (admin/agent changed it) — re-ask.
+      if (status === 403) numberChanged();
+      else setError(err instanceof Error ? err.message : "Could not save.");
       setBusy(false);
     }
   }

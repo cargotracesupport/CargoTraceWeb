@@ -59,9 +59,15 @@ export default function CustomerTracker({
     vehicle: string | null;
   } | null>(null);
 
+  // When the customer just saved a drop-off, a poll already in flight (read
+  // before the write committed) can return dest=null and wipe it, flashing the
+  // form back. Ignore stale "no drop-off" polls briefly after a local save.
+  const dropoffSavedAt = useRef(0);
+
   // Immediately reflect a saved drop-off (before the next poll) so the setter
   // flips to the live view without a page reload.
-  const applyDropoff = (lat: number, lng: number, label: string | null) =>
+  const applyDropoff = (lat: number, lng: number, label: string | null) => {
+    dropoffSavedAt.current = Date.now();
     setDelivery((d) => ({
       ...d,
       dest_lat: lat,
@@ -69,6 +75,7 @@ export default function CustomerTracker({
       dest_label: label ?? d.dest_label,
       status: d.status === "awaiting_dropoff" ? "pending" : d.status,
     }));
+  };
 
   const vehicleOf = (d: PublicDelivery) =>
     d.vehicle?.plate ?? d.vehicle?.name ?? null;
@@ -104,6 +111,13 @@ export default function CustomerTracker({
         const json = (await res.json()) as { delivery?: PublicDelivery };
         if (!active || !json.delivery) return;
         const d = json.delivery;
+
+        // Stale-poll guard: if the customer saved a drop-off in the last 15s but
+        // this response still has none, it's an in-flight read from before the
+        // write committed — ignore it so the form doesn't flash back.
+        if (d.dest_lat == null && Date.now() - dropoffSavedAt.current < 15000) {
+          return;
+        }
 
         // Notify only when an already-known driver/vehicle actually changes
         // (not on first assignment, where the previous value was null).
