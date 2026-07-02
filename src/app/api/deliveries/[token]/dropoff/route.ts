@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 // Compare by the trailing digits so "+91 90000 00000" == "9000000000".
 const normPhone = (s: string) => (s ?? "").replace(/\D/g, "").slice(-10);
 
-// Throttle phone-match attempts per token: even with a valid token, the customer
-// phone shouldn't be brute-forceable. 10 tries/minute is plenty for a real human.
+// Throttle phone-match attempts per token (DB-backed, so it works across
+// serverless instances). 10 tries/minute is plenty for a real human.
 const RL_LIMIT = 10;
-const RL_WINDOW_MS = 60_000;
+const RL_WINDOW_S = 60;
 const MAX_LABEL_LEN = 200;
 
 /**
@@ -39,16 +38,21 @@ export async function POST(
     );
   }
 
-  // Rate-limit per tracking token to blunt phone-number brute-forcing.
-  const rl = rateLimit(`dropoff:${params.token}`, RL_LIMIT, RL_WINDOW_MS);
-  if (!rl.ok) {
+  const supabase = createAdminClient();
+
+  // Rate-limit per tracking token (durable, cross-instance) to blunt brute-force.
+  const { data: allowed } = await supabase.rpc("rate_limit_hit", {
+    p_key: `dropoff:${params.token}`,
+    p_limit: RL_LIMIT,
+    p_window_seconds: RL_WINDOW_S,
+  });
+  if (allowed === false) {
     return NextResponse.json(
       { error: "Too many attempts. Please wait a minute and try again." },
-      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } },
+      { status: 429, headers: { "Retry-After": String(RL_WINDOW_S) } },
     );
   }
 
-  const supabase = createAdminClient();
   const { data: d } = await supabase
     .from("deliveries")
     .select(
@@ -108,7 +112,10 @@ export async function POST(
         : "pending"
       : d.status;
 
-  const { error: upErr } = await supabase
+  // Only set the drop-off while the delivery is still waiting for it — this
+  // avoids clobbering a trip that already started (the freeze trigger would
+  // reject it) and makes the write idempotent.
+  const { data: updated, error: upErr } = await supabase
     .from("deliveries")
     .update({
       dest_lat: lat,
@@ -116,13 +123,28 @@ export async function POST(
       dest_label: label,
       status: newStatus,
     })
-    .eq("id", d.id);
+    .eq("id", d.id)
+    .in("status", ["awaiting_dropoff", "pending", "assigned"])
+    .select("id, dest_lat, dest_lng")
+    .maybeSingle();
 
   if (upErr) {
     console.error("dropoff update failed:", upErr.message);
     return NextResponse.json(
-      { error: "Could not save the drop-off location." },
+      { error: "Could not save the drop-off location. Please try again." },
       { status: 400 },
+    );
+  }
+
+  // Zero rows updated (deleted/started in a race) OR the coordinates didn't
+  // actually land — never report success, or the customer sees the form again.
+  if (!updated || updated.dest_lat == null || updated.dest_lng == null) {
+    return NextResponse.json(
+      {
+        error:
+          "We couldn't save your location — the delivery may have changed. Please refresh and try again.",
+      },
+      { status: 409 },
     );
   }
 

@@ -52,11 +52,23 @@ export default function CustomerTracker({
   initial: PublicDelivery;
 }) {
   const [delivery, setDelivery] = useState<PublicDelivery>(initial);
+  const [gone, setGone] = useState(false);
   // Popup shown when the driver/vehicle handling this delivery changes.
   const [changeNotice, setChangeNotice] = useState<{
     driver: string | null;
     vehicle: string | null;
   } | null>(null);
+
+  // Immediately reflect a saved drop-off (before the next poll) so the setter
+  // flips to the live view without a page reload.
+  const applyDropoff = (lat: number, lng: number, label: string | null) =>
+    setDelivery((d) => ({
+      ...d,
+      dest_lat: lat,
+      dest_lng: lng,
+      dest_label: label ?? d.dest_label,
+      status: d.status === "awaiting_dropoff" ? "pending" : d.status,
+    }));
 
   const vehicleOf = (d: PublicDelivery) =>
     d.vehicle?.plate ?? d.vehicle?.name ?? null;
@@ -68,13 +80,26 @@ export default function CustomerTracker({
   });
 
   useEffect(() => {
+    // Terminal states don't change — don't poll forever.
+    if (initial.status === "delivered" || initial.status === "cancelled") return;
+
     let active = true;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    const stop = () => {
+      if (timer) clearInterval(timer);
+      timer = null;
+    };
 
     async function poll() {
       try {
         const res = await fetch(`/api/deliveries/${token}`, {
           cache: "no-store",
         });
+        if (res.status === 404) {
+          if (active) setGone(true);
+          stop();
+          return;
+        }
         if (!res.ok) return;
         const json = (await res.json()) as { delivery?: PublicDelivery };
         if (!active || !json.delivery) return;
@@ -95,20 +120,23 @@ export default function CustomerTracker({
         seenRef.current = { driver: newDriver, vehicle: newVehicle };
 
         setDelivery(d);
+        // Stop once the journey is over.
+        if (d.status === "delivered" || d.status === "cancelled") stop();
       } catch {
         // transient network error — keep showing the last known state
       }
     }
 
-    const id = setInterval(poll, POLL_MS);
+    timer = setInterval(poll, POLL_MS);
     return () => {
       active = false;
-      clearInterval(id);
+      stop();
     };
-  }, [token]);
+  }, [token, initial.status]);
 
   const status = delivery.status as DeliveryStatus;
   const isDelivered = status === "delivered";
+  const isCancelled = status === "cancelled";
 
   const hasPosition = delivery.last_lat != null && delivery.last_lng != null;
   const needsDropoff =
@@ -172,6 +200,11 @@ export default function CustomerTracker({
 
   return (
     <main className="min-h-dvh text-text flex flex-col">
+      {gone ? (
+        <div className="bg-red/10 px-4 py-2 text-center text-xs font-medium text-red">
+          This tracking link is no longer available.
+        </div>
+      ) : null}
       {/* ── Gradient hero ─────────────────────────────────────── */}
       <header className="relative overflow-hidden px-4 pb-16 pt-5 text-white">
         <div
@@ -209,15 +242,21 @@ export default function CustomerTracker({
           <p className="text-[11px] font-semibold uppercase tracking-[2px] text-white/70">
             {needsDropoff
               ? "Action needed"
-              : isDelivered
-                ? "Delivery complete"
-                : hasPosition
-                  ? "Arriving in"
-                  : "Preparing your delivery"}
+              : isCancelled
+                ? "Delivery cancelled"
+                : isDelivered
+                  ? "Delivery complete"
+                  : hasPosition
+                    ? "Arriving in"
+                    : "Preparing your delivery"}
           </p>
           {needsDropoff ? (
             <div className="mt-1 text-2xl font-bold tracking-tight">
               Set your drop-off location
+            </div>
+          ) : isCancelled ? (
+            <div className="mt-1 text-3xl font-extrabold tracking-tight">
+              This delivery was cancelled
             </div>
           ) : isDelivered ? (
             <div className="mt-1 flex items-center gap-2 text-4xl font-extrabold tracking-tight">
@@ -247,7 +286,11 @@ export default function CustomerTracker({
       {/* ── Content (overlaps hero) ───────────────────────────── */}
       <div className="mx-auto -mt-10 flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pb-6">
         {needsDropoff ? (
-          <DropoffSetter token={token} origin={originPoint} />
+          <DropoffSetter
+            token={token}
+            origin={originPoint}
+            onSaved={applyDropoff}
+          />
         ) : (
         <>
         {/* Route + reference */}

@@ -18,9 +18,13 @@ const phoneKey = (token: string) => `ct_track_phone:${token}`;
 export default function DropoffSetter({
   token,
   origin,
+  onSaved,
 }: {
   token: string;
   origin: LatLng | null;
+  // Called after a confirmed save so the tracker flips to the live view instantly
+  // (no full-page reload). The parent also keeps polling as a safety net.
+  onSaved?: (lat: number, lng: number, label: string | null) => void;
 }) {
   const [phone, setPhone] = useState("");
   const [verified, setVerified] = useState(false);
@@ -82,8 +86,11 @@ export default function DropoffSetter({
     }
     setBusy(true);
     try {
-      await call({ lat: point.lat, lng: point.lng, label: label.trim() || undefined });
-      window.location.reload();
+      const lbl = label.trim();
+      await call({ lat: point.lat, lng: point.lng, label: lbl || undefined });
+      // Only reached when the server confirms the drop-off was actually written
+      // (the API now 409s on a silent no-op). Flip the tracker view immediately.
+      onSaved?.(point.lat, point.lng, lbl || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save.");
       setBusy(false);
