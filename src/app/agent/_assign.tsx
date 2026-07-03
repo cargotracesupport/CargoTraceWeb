@@ -8,6 +8,7 @@ import Spinner from "@/components/Spinner";
 import Link from "next/link";
 import { Avatar, MapPin, Flag, Package, Check, Search, Truck, Plus, Pencil } from "@/components/icons";
 import { groupSameRoute } from "@/lib/cluster";
+import { groupByRoad, type RouteItem } from "@/lib/routeGroup";
 
 // Details are editable only until the trip starts (matches the DB freeze).
 const CAN_EDIT = new Set(["awaiting_dropoff", "pending", "assigned"]);
@@ -142,23 +143,91 @@ export default function AssignConsole({
   );
   const done = filtered.filter((r) => DONE.has(r.status));
 
-  // Cluster the ready deliveries into same-route groups (proximity-based).
-  // Deliveries missing a pickup coordinate can't be clustered → own group.
-  const routeGroups = useMemo(() => {
-    const withPts = ready
-      .filter((r) => r.origin_lat != null && r.origin_lng != null)
-      .map((r) => ({
-        delivery: r,
-        origin: { lat: r.origin_lat as number, lng: r.origin_lng as number },
-        dest: { lat: r.dest_lat as number, lng: r.dest_lng as number },
-      }));
-    const grouped = groupSameRoute(withPts).map((g) => g.map((x) => x.delivery));
-    const singles = ready
-      .filter((r) => r.origin_lat == null || r.origin_lng == null)
-      .map((r) => [r]);
-    return [...grouped, ...singles];
+  // Cluster the ready deliveries into same-route groups. Deliveries missing a
+  // pickup coordinate can't be clustered → own group.
+  //
+  // Signature of the ready set — regroup only when it actually changes.
+  const readySig = useMemo(
+    () =>
+      JSON.stringify(
+        ready.map((r) => [
+          r.id,
+          r.origin_lat,
+          r.origin_lng,
+          r.dest_lat,
+          r.dest_lng,
+        ]),
+      ),
+    [ready],
+  );
+  const readyWithPts = useMemo(
+    () => ready.filter((r) => r.origin_lat != null && r.origin_lng != null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(ready.map((r) => [r.id, r.origin_lat, r.dest_lat]))]);
+    [readySig],
+  );
+  const readySingles = useMemo(
+    () =>
+      ready
+        .filter((r) => r.origin_lat == null || r.origin_lng == null)
+        .map((r) => [r]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [readySig],
+  );
+
+  // Instant straight-line grouping — shown immediately and used as a fallback
+  // whenever road routing is unavailable.
+  const fallbackGroups = useMemo(() => {
+    const withPts = readyWithPts.map((r) => ({
+      delivery: r,
+      origin: { lat: r.origin_lat as number, lng: r.origin_lng as number },
+      dest: { lat: r.dest_lat as number, lng: r.dest_lng as number },
+    }));
+    const grouped = groupSameRoute(withPts).map((g) => g.map((x) => x.delivery));
+    return [...grouped, ...readySingles];
+  }, [readyWithPts, readySingles]);
+
+  // Accurate grouping by *real driving detour* (OSRM). Async; falls back to the
+  // straight-line groups above until it resolves (or if routing is down).
+  const [roadGroups, setRoadGroups] = useState<Delivery[][] | null>(null);
+  const [grouping, setGrouping] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (readyWithPts.length < 2) {
+      setRoadGroups(null);
+      return;
+    }
+    const items: RouteItem<Delivery>[] = readyWithPts.map((r) => ({
+      id: r.id,
+      origin: { lat: r.origin_lat as number, lng: r.origin_lng as number },
+      dest: { lat: r.dest_lat as number, lng: r.dest_lng as number },
+      ref: r,
+    }));
+    setGrouping(true);
+    groupByRoad(items)
+      .then((groups) => {
+        if (cancelled) return;
+        // null → routing unavailable; keep using the straight-line fallback.
+        setRoadGroups(
+          groups
+            ? [...groups.map((g) => g.map((it) => it.ref)), ...readySingles]
+            : null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setRoadGroups(null);
+      })
+      .finally(() => {
+        if (!cancelled) setGrouping(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readySig]);
+
+  const routeGroups = roadGroups ?? fallbackGroups;
+  const groupMode: "road" | "line" = roadGroups ? "road" : "line";
 
   const patchRow = useCallback((row: Delivery) => {
     setRows((prev) => prev.map((r) => (r.id === row.id ? row : r)));
@@ -228,6 +297,8 @@ export default function AssignConsole({
             drivers={drivers}
             busyByDriver={busyByDriver}
             onAssigned={patchRow}
+            mode={groupMode}
+            grouping={grouping}
           />
           <WaitingForDropoff deliveries={waitingDropoff} />
           {routeGroups.length === 0 && waitingDropoff.length === 0 ? (
@@ -250,6 +321,8 @@ export default function AssignConsole({
             drivers={drivers}
             busyByDriver={busyByDriver}
             onAssigned={patchRow}
+            mode={groupMode}
+            grouping={grouping}
           />
           <WaitingForDropoff deliveries={waitingDropoff} />
           <Section
@@ -300,6 +373,8 @@ function ReadyToAssign({
   drivers,
   busyByDriver,
   onAssigned,
+  mode,
+  grouping,
 }: {
   groups: Delivery[][];
   drivers: DriverOption[];
@@ -308,6 +383,8 @@ function ReadyToAssign({
     { status: string; reference: string | null; deliveryId: string }
   >;
   onAssigned: (row: Delivery) => void;
+  mode: "road" | "line";
+  grouping: boolean;
 }) {
   const total = groups.reduce((n, g) => n + g.length, 0);
   if (total === 0) return null;
@@ -323,8 +400,10 @@ function ReadyToAssign({
         </span>
       </div>
       <p className="px-1 text-xs text-muted2">
-        Drop-off is set — grouped by route. Put same-route deliveries on one
-        driver.
+        {mode === "road"
+          ? "Drop-off is set — grouped by real driving route (on-the-way stops chain together, in visiting order). Put a route on one driver."
+          : "Drop-off is set — grouped by proximity. Put same-route deliveries on one driver."}
+        {grouping ? " · updating…" : ""}
       </p>
       {groups.map((g, i) => (
         <RouteGroupCard
@@ -391,12 +470,20 @@ function RouteGroupCard({
   return (
     <div className="ct-card flex flex-col gap-3 p-4">
       <ul className="flex flex-col gap-1.5">
-        {group.map((d) => (
+        {group.map((d, idx) => (
           <li
             key={d.id}
             className="flex items-center justify-between gap-2 text-xs"
           >
             <span className="inline-flex shrink-0 items-center gap-1.5">
+              {group.length > 1 ? (
+                <span
+                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary"
+                  title={`Stop ${idx + 1} on the route`}
+                >
+                  {String.fromCharCode(65 + idx)}
+                </span>
+              ) : null}
               <span className="font-mono font-medium text-primary">
                 {d.reference ?? "—"}
               </span>
