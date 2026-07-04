@@ -123,6 +123,7 @@ export default function LiveMap({
   focusKey,
   className,
   fit = true,
+  pitch = PITCH,
 }: {
   markers: MapMarker[];
   route?: Array<[number, number]>;
@@ -135,6 +136,9 @@ export default function LiveMap({
   focusKey?: string;
   className?: string;
   fit?: boolean;
+  /** Camera tilt. Defaults to the 3D navigation view; pass 0 for a flat, top-down
+   *  overview (better for wide multi-stop maps spanning long distances). */
+  pitch?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -148,7 +152,7 @@ export default function LiveMap({
       style: mapStyleUrl(),
       center: [120.9842, 14.5995],
       zoom: 11,
-      pitch: PITCH,
+      pitch,
       attributionControl: false,
     });
     map.addControl(
@@ -202,7 +206,7 @@ export default function LiveMap({
       // Fit flat (no pitch here — fitting bounds *at* a tilt over-zooms); the
       // camera keeps the 3D pitch set at init / re-applied below.
       map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 });
-      if (Math.round(map.getPitch()) !== PITCH) map.setPitch(PITCH);
+      if (Math.round(map.getPitch()) !== pitch) map.setPitch(pitch);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markers, fit]);
@@ -218,7 +222,7 @@ export default function LiveMap({
     map.flyTo({
       center: [focus.lng, focus.lat],
       zoom: focus.zoom ?? 13,
-      pitch: PITCH,
+      pitch,
       duration: 1100,
       essential: true,
     });

@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import type { Delivery } from "@/lib/types";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import type { Delivery, DeliveryStatus } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
-import { MapPin, Flag } from "@/components/icons";
+import Spinner from "@/components/Spinner";
+import { MapPin, Flag, Locate, Check } from "@/components/icons";
 import { groupSameRoute, haversineKm, type Pt } from "@/lib/cluster";
 import { groupByRoad, type RouteItem } from "@/lib/routeGroup";
 import { roadRouteThrough } from "@/lib/route";
@@ -164,12 +167,135 @@ export default function DriverTrips({ deliveries }: { deliveries: Delivery[] }) 
   );
 }
 
+type GpsState = "off" | "starting" | "on" | "denied" | "error";
+
 function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
-  const anyMoving = stops.some((s) => s.status === "en_route");
+  const router = useRouter();
   const pickup = stops[0];
 
-  // Map markers: pickup + each drop-off lettered A/B/C in visiting order, plus
-  // the driver's live position (any en-route stop carries the fanned-out fix).
+  // Local status overrides so the card reacts instantly to start/deliver taps
+  // (the server refresh below persists them).
+  const [override, setOverride] = useState<Record<string, DeliveryStatus>>({});
+  const st = useCallback(
+    (d: Delivery): DeliveryStatus => override[d.id] ?? d.status,
+    [override],
+  );
+
+  const assignedIds = stops.filter((d) => st(d) === "assigned").map((d) => d.id);
+  const anyEnRoute = stops.some((d) => st(d) === "en_route");
+  const allDone = stops.every(
+    (d) => st(d) === "delivered" || st(d) === "cancelled",
+  );
+  const notStarted = stops.every((d) => st(d) === "assigned");
+
+  const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [gps, setGps] = useState<GpsState>("off");
+  const [confirm, setConfirm] = useState<null | "start" | string>(null); // string = stop id to deliver
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const watchRef = useRef<number | null>(null);
+
+  // The delivery id we attach GPS pings to; /api/track fans the fix out to all
+  // of this driver's en-route stops, so any en-route id works.
+  const enRouteIdRef = useRef<string | null>(null);
+  enRouteIdRef.current = stops.find((d) => st(d) === "en_route")?.id ?? null;
+
+  const stopGps = useCallback(() => {
+    if (watchRef.current != null && typeof navigator !== "undefined") {
+      navigator.geolocation.clearWatch(watchRef.current);
+    }
+    watchRef.current = null;
+  }, []);
+
+  const sendPing = useCallback(async (p: GeolocationPosition) => {
+    const deliveryId = enRouteIdRef.current;
+    if (!deliveryId) return;
+    try {
+      await fetch("/api/track", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deliveryId,
+          lat: p.coords.latitude,
+          lng: p.coords.longitude,
+          speed: p.coords.speed != null ? p.coords.speed * 3.6 : null,
+          heading: p.coords.heading,
+          recordedAt: new Date(p.timestamp).toISOString(),
+        }),
+      });
+    } catch {
+      /* transient network error — next fix retries */
+    }
+  }, []);
+
+  const startGps = useCallback(() => {
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      setGps("error");
+      return;
+    }
+    if (watchRef.current != null) return;
+    setGps("starting");
+    watchRef.current = navigator.geolocation.watchPosition(
+      (p) => {
+        setGps("on");
+        setPos({ lat: p.coords.latitude, lng: p.coords.longitude });
+        void sendPing(p);
+      },
+      (err) => setGps(err.code === err.PERMISSION_DENIED ? "denied" : "error"),
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
+    );
+  }, [sendPing]);
+
+  // GPS runs while any stop on the trip is en route; stops when all are done.
+  useEffect(() => {
+    if (anyEnRoute) startGps();
+    else stopGps();
+    return () => stopGps();
+  }, [anyEnRoute, startGps, stopGps]);
+
+  async function startTrip() {
+    setBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: err } = await supabase
+      .from("deliveries")
+      .update({ status: "en_route", started_at: new Date().toISOString() })
+      .in("id", assignedIds)
+      .eq("status", "assigned");
+    setBusy(false);
+    setConfirm(null);
+    if (err) {
+      setError("Could not start the trip. Please try again.");
+      return;
+    }
+    setOverride((prev) => {
+      const next = { ...prev };
+      for (const id of assignedIds) next[id] = "en_route";
+      return next;
+    });
+    startGps();
+    router.refresh();
+  }
+
+  async function deliverStop(id: string) {
+    setBusy(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: err } = await supabase
+      .from("deliveries")
+      .update({ status: "delivered", delivered_at: new Date().toISOString() })
+      .eq("id", id);
+    setBusy(false);
+    setConfirm(null);
+    if (err) {
+      setError("Could not mark this stop delivered. Please try again.");
+      return;
+    }
+    setOverride((prev) => ({ ...prev, [id]: "delivered" }));
+    router.refresh();
+  }
+
+  // Map markers: pickup + each drop-off lettered A/B/C, plus the live truck.
   const markers: MapMarker[] = [];
   if (pickup.origin_lat != null && pickup.origin_lng != null) {
     markers.push({
@@ -192,19 +318,18 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
       });
     }
   });
-  const live = stops
+  const liveStored = stops
     .filter((s) => s.last_lat != null && s.last_lng != null)
     .sort((a, b) =>
       (b.last_position_at ?? "").localeCompare(a.last_position_at ?? ""),
     )[0];
-  if (anyMoving && live?.last_lat != null && live?.last_lng != null) {
-    markers.push({
-      id: "you",
-      lng: live.last_lng,
-      lat: live.last_lat,
-      label: "You",
-      kind: "truck",
-    });
+  const live =
+    pos ??
+    (liveStored?.last_lat != null && liveStored?.last_lng != null
+      ? { lat: liveStored.last_lat, lng: liveStored.last_lng }
+      : null);
+  if (anyEnRoute && live) {
+    markers.push({ id: "you", lng: live.lng, lat: live.lat, label: "You", kind: "truck" });
   }
 
   // Stitched by-road path pickup → A → B → …
@@ -234,6 +359,12 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopKey]);
 
+  const headPill = allDone
+    ? { cls: "bg-s3 text-muted2", label: "Completed" }
+    : anyEnRoute
+      ? { cls: "bg-green/10 text-green", label: "In progress", dot: true }
+      : { cls: "bg-amber/10 text-amber", label: "Not started" };
+
   return (
     <div className="ct-card overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -243,25 +374,30 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
             {stops.length} stops
           </span>
         </div>
-        {anyMoving ? (
-          <span className="ct-pill bg-green/10 text-green">
+        <span className={`ct-pill ${headPill.cls}`}>
+          {headPill.dot ? (
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
-            In progress
-          </span>
-        ) : (
-          <span className="ct-pill bg-amber/10 text-amber">Not started</span>
-        )}
+          ) : null}
+          {headPill.label}
+        </span>
       </div>
 
-      {/* Whole-trip map: pickup + lettered stops in road order */}
+      {/* Whole-trip map: pickup + lettered stops in road order (flat overview) */}
       {markers.length > 1 ? (
-        <div className="h-[220px] w-full border-b border-border">
+        <div className="relative h-[220px] w-full border-b border-border">
           <LiveMap
             markers={markers}
             route={route}
             className="h-full w-full"
+            pitch={0}
             fit
           />
+          {gps === "on" ? (
+            <div className="pointer-events-none absolute right-3 top-3 z-[1] inline-flex items-center gap-1.5 rounded-full border border-border2 bg-s1/90 px-2.5 py-1 text-[11px] font-semibold backdrop-blur">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
+              <span className="text-green">Live GPS</span>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -273,32 +409,133 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
       </div>
 
       <ul className="divide-y divide-border">
-        {stops.map((d, i) => (
-          <li key={d.id}>
-            <Link
-              href={`/driver/deliveries/${d.id}`}
-              className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-s2"
-            >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
-                {LETTERS[i] ?? "•"}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <Flag className="h-3.5 w-3.5 shrink-0 text-green" />
-                  <span className="truncate text-sm font-medium">
-                    {d.dest_label ?? "Drop-off"}
-                  </span>
+        {stops.map((d, i) => {
+          const status = st(d);
+          return (
+            <li key={d.id} className="flex items-center gap-2 px-4 py-3">
+              <Link
+                href={`/driver/deliveries/${d.id}`}
+                className="flex min-w-0 flex-1 items-center gap-3 transition-colors hover:opacity-80"
+              >
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                  {LETTERS[i] ?? "•"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <Flag className="h-3.5 w-3.5 shrink-0 text-green" />
+                    <span className="truncate text-sm font-medium">
+                      {d.dest_label ?? "Drop-off"}
+                    </span>
+                  </div>
+                  <p className="truncate text-xs text-muted">
+                    {d.reference ?? ""}
+                    {d.customer_name ? ` · ${d.customer_name}` : ""}
+                  </p>
                 </div>
-                <p className="truncate text-xs text-muted">
-                  {d.reference ?? ""}
-                  {d.customer_name ? ` · ${d.customer_name}` : ""}
-                </p>
-              </div>
-              <DeliveryStatusBadge status={d.status} />
-            </Link>
-          </li>
-        ))}
+              </Link>
+              {status === "en_route" ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirm(d.id)}
+                  className="ct-btn-primary shrink-0 px-2.5 py-1.5 text-xs disabled:opacity-60"
+                >
+                  <Check className="h-3.5 w-3.5" /> Delivered
+                </button>
+              ) : (
+                <DeliveryStatusBadge status={status} />
+              )}
+            </li>
+          );
+        })}
       </ul>
+
+      {/* Trip-level action: start every stop at once */}
+      {notStarted ? (
+        <div className="border-t border-border p-3">
+          <button
+            type="button"
+            disabled={busy || assignedIds.length === 0}
+            onClick={() => setConfirm("start")}
+            className="ct-btn-primary w-full py-3 text-base disabled:opacity-60"
+          >
+            <Locate className="h-4 w-4" /> Start trip ({stops.length} stops)
+          </button>
+          <p className="mt-2 text-center text-xs text-muted">
+            Starts all stops and shares your live location until every stop is
+            delivered.
+          </p>
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className="border-t border-border px-4 py-2 text-center text-sm text-red">
+          {error}
+        </p>
+      ) : null}
+
+      {/* Confirm dialog — trip start or per-stop delivery */}
+      {confirm ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 backdrop-blur-sm sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => !busy && setConfirm(null)}
+        >
+          <div
+            className="ct-card w-full max-w-sm p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-green/15 text-green">
+                {confirm === "start" ? (
+                  <Locate className="h-4 w-4" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+              </span>
+              <h3 className="text-base font-semibold">
+                {confirm === "start"
+                  ? `Start this trip (${stops.length} stops)?`
+                  : "Mark this stop delivered?"}
+              </h3>
+            </div>
+            <p className="text-sm text-muted2">
+              {confirm === "start"
+                ? "All stops start together and your phone’s live location is shared with customers and the dispatcher until every stop is delivered. Your browser may ask for location permission."
+                : "This completes the stop. The trip keeps sharing your location until the remaining stops are delivered."}
+            </p>
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirm(null)}
+                className="ct-btn-ghost flex-1 justify-center"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  confirm === "start" ? startTrip() : deliverStop(confirm)
+                }
+                className="ct-btn-primary flex-1 justify-center disabled:opacity-60"
+              >
+                {busy ? (
+                  <>
+                    <Spinner /> Saving…
+                  </>
+                ) : confirm === "start" ? (
+                  "Start trip"
+                ) : (
+                  "Mark delivered"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
