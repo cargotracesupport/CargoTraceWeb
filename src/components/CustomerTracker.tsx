@@ -6,6 +6,7 @@ import DropoffSetter from "@/components/DropoffSetter";
 import { BrandMark, Wordmark, Check, MapPin, Flag, Truck, Phone, Avatar } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
 import { estimateEtaMinutes, formatEta } from "@/lib/eta";
+import { roadRouteThrough } from "@/lib/route";
 import type { DeliveryStatus } from "@/lib/types";
 
 // Mirrors the GET /api/deliveries/{token} contract — the public delivery shape.
@@ -25,6 +26,7 @@ export interface PublicDelivery {
   last_speed: number | null;
   last_position_at: string | null;
   delivered_at: string | null;
+  picked_up_at: string | null;
   driver?: { full_name: string | null; phone: string | null } | null;
   vehicle?: { plate: string | null; name: string | null } | null;
 }
@@ -201,15 +203,68 @@ export default function CustomerTracker({
       ? [delivery.dest_lng, delivery.dest_lat]
       : undefined;
 
+  // The goods haven't been collected yet: the driver is still heading to the
+  // pickup, so the customer sees that leg (route + status) explicitly.
+  const headingToPickup =
+    status === "en_route" &&
+    hasPosition &&
+    delivery.picked_up_at == null &&
+    originPoint != null;
+
+  // Road path driver → pickup (→ drop-off) while heading to pickup. Throttled
+  // to ~1 km position buckets so the 3s poll doesn't re-hit routing.
+  const truckKey = hasPosition
+    ? `${(delivery.last_lat as number).toFixed(2)},${(delivery.last_lng as number).toFixed(2)}`
+    : "";
+  const [pickupRoute, setPickupRoute] = useState<
+    Array<[number, number]> | undefined
+  >(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    if (!headingToPickup || !originPoint) {
+      setPickupRoute(undefined);
+      return;
+    }
+    const pts: Array<[number, number]> = [
+      [delivery.last_lng as number, delivery.last_lat as number],
+      [originPoint.lng, originPoint.lat],
+    ];
+    if (delivery.dest_lat != null && delivery.dest_lng != null) {
+      pts.push([delivery.dest_lng, delivery.dest_lat]);
+    }
+    roadRouteThrough(pts).then((r) => {
+      if (!cancelled) setPickupRoute(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headingToPickup, truckKey]);
+
+  const truckPoint = hasPosition
+    ? { lat: delivery.last_lat as number, lng: delivery.last_lng as number }
+    : null;
+  const destPoint =
+    delivery.dest_lat != null && delivery.dest_lng != null
+      ? { lat: delivery.dest_lat, lng: delivery.dest_lng }
+      : null;
+  // ETA to the customer. While heading to pickup it's the sum of both legs
+  // (driver → pickup, pickup → drop-off) so "arriving in" stays honest.
   const etaMin =
-    !isDelivered && hasPosition
-      ? estimateEtaMinutes(
-          { lat: delivery.last_lat as number, lng: delivery.last_lng as number },
-          delivery.dest_lat != null && delivery.dest_lng != null
-            ? { lat: delivery.dest_lat, lng: delivery.dest_lng }
-            : null,
-          delivery.last_speed,
-        )
+    !isDelivered && truckPoint
+      ? headingToPickup && originPoint
+        ? (() => {
+            const toPickup = estimateEtaMinutes(
+              truckPoint,
+              originPoint,
+              delivery.last_speed,
+            );
+            const onward = destPoint
+              ? estimateEtaMinutes(originPoint, destPoint, null)
+              : 0;
+            return toPickup == null ? null : toPickup + (onward ?? 0);
+          })()
+        : estimateEtaMinutes(truckPoint, destPoint, delivery.last_speed)
       : null;
 
   return (
@@ -415,12 +470,21 @@ export default function CustomerTracker({
               </a>
             ) : null}
             {hasPosition ? (
-              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-green/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-green">
+              <p
+                className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                  headingToPickup ? "bg-amber/10 text-amber" : "bg-green/10 text-green"
+                }`}
+              >
                 <span className="relative inline-flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green opacity-70" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-green" />
+                  <span
+                    className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-70 ${headingToPickup ? "bg-amber" : "bg-green"}`}
+                  />
+                  <span
+                    className={`relative inline-flex h-2 w-2 rounded-full ${headingToPickup ? "bg-amber" : "bg-green"}`}
+                  />
                 </span>
-                On the way · updated {fmtTime(delivery.last_position_at) || "—"}
+                {headingToPickup ? "On the way to pickup" : "On the way to you"} ·
+                updated {fmtTime(delivery.last_position_at) || "—"}
               </p>
             ) : (
               <p className="mt-3 text-xs text-muted2">
@@ -436,8 +500,11 @@ export default function CustomerTracker({
             {markers.length > 0 ? (
               <LiveMap
                 markers={markers}
-                roadFrom={roadFrom}
-                roadTo={roadTo}
+                // Heading to pickup: draw driver → pickup → drop-off; after
+                // collection the usual pickup → drop-off road line.
+                route={headingToPickup ? pickupRoute : undefined}
+                roadFrom={headingToPickup ? undefined : roadFrom}
+                roadTo={headingToPickup ? undefined : roadTo}
                 fit
                 className="h-full w-full"
               />

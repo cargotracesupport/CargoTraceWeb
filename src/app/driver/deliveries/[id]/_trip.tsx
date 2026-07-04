@@ -23,12 +23,15 @@ export default function DriverTrip({
   origin,
   dest,
   initialPos,
+  pickedUp = false,
 }: {
   deliveryId: string;
   status: DeliveryStatus;
   origin: Place | null;
   dest: Place | null;
   initialPos: { lat: number; lng: number } | null;
+  /** Server-side "goods collected" stamp (deliveries.picked_up_at). */
+  pickedUp?: boolean;
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<DeliveryStatus>(initialStatus);
@@ -44,17 +47,21 @@ export default function DriverTrip({
   const [error, setError] = useState<string | null>(null);
   const watchRef = useRef<number | null>(null);
 
-  // Has the driver collected the goods? Auto-detected when a GPS fix lands near
-  // the pickup; remembered per delivery so a reload doesn't route back to it.
-  const [pickupReached, setPickupReached] = useState(false);
+  // Has the driver collected the goods? The server stamp (GPS ingest) wins —
+  // it survives device changes; localStorage covers the moments before it lands.
+  const [pickupReached, setPickupReached] = useState(pickedUp);
   useEffect(() => {
+    if (pickedUp) {
+      setPickupReached(true);
+      return;
+    }
     try {
       if (localStorage.getItem(`ct_pickup_reached:${deliveryId}`))
         setPickupReached(true);
     } catch {
       /* storage unavailable — detection still works within the session */
     }
-  }, [deliveryId]);
+  }, [deliveryId, pickedUp]);
   const markPickupReached = useCallback(() => {
     setPickupReached(true);
     try {

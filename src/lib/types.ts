@@ -78,6 +78,7 @@ export interface Delivery {
   created_at: string;
   assigned_at: string | null;
   started_at: string | null;
+  picked_up_at: string | null;
   delivered_at: string | null;
 }
 

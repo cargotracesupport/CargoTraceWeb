@@ -229,14 +229,21 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
       ? { lat: pickup.origin_lat, lng: pickup.origin_lng }
       : null;
   const [pickupReached, setPickupReached] = useState(false);
+  const serverPickedUp = stops.some((s) => s.picked_up_at != null);
   useEffect(() => {
+    // Server-side stamp (set by the GPS ingest) wins — it survives device
+    // changes; localStorage covers the moments before the stamp lands.
+    if (serverPickedUp) {
+      setPickupReached(true);
+      return;
+    }
     try {
       if (localStorage.getItem(pickupReachedKey(tripKey)))
         setPickupReached(true);
     } catch {
       /* storage unavailable — detection still works within the session */
     }
-  }, [tripKey]);
+  }, [tripKey, serverPickedUp]);
   const markPickupReached = useCallback(() => {
     setPickupReached(true);
     try {

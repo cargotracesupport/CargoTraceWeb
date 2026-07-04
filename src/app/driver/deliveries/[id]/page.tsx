@@ -109,6 +109,7 @@ export default async function DriverDeliveryPage({
         origin={origin}
         dest={dest}
         initialPos={initialPos}
+        pickedUp={delivery.picked_up_at != null}
       />
     </div>
   );

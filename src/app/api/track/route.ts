@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { haversineKm } from "@/lib/cluster";
 
 export const dynamic = "force-dynamic";
 
 // How far the client-supplied recordedAt may stray from the server clock before
 // we distrust it and stamp server-side instead (guards against back/forward-dating).
 const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
+
+// A fix within this distance of a delivery's origin means the driver has
+// collected the goods (matches the driver app's own pickup detection).
+const PICKUP_RADIUS_KM = 0.3;
 
 /**
  * GPS ingest endpoint — AUTHENTICATED. The driver app shares the phone's GPS
@@ -151,6 +156,38 @@ export async function POST(req: Request) {
       .eq("driver_id", delivery.driver_id)
       .eq("status", "en_route")
       .neq("id", delivery.id);
+  }
+
+  // Pickup detection: the first fix within ~300 m of a delivery's origin stamps
+  // picked_up_at, flipping trackers from "heading to pickup" to "on the way to
+  // you". Covers the whole trip — grouped stops share the pickup. The extra
+  // query self-retires: once stamped, `picked_up_at is null` matches nothing.
+  let candQuery = supabase
+    .from("deliveries")
+    .select("id, origin_lat, origin_lng")
+    .is("picked_up_at", null)
+    .eq("status", "en_route");
+  candQuery = delivery.driver_id
+    ? candQuery.eq("driver_id", delivery.driver_id)
+    : candQuery.eq("id", delivery.id);
+  const { data: unpicked } = await candQuery;
+  const atPickup = (unpicked ?? [])
+    .filter(
+      (c) =>
+        c.origin_lat != null &&
+        c.origin_lng != null &&
+        haversineKm(
+          { lat, lng },
+          { lat: c.origin_lat, lng: c.origin_lng },
+        ) <= PICKUP_RADIUS_KM,
+    )
+    .map((c) => c.id);
+  if (atPickup.length) {
+    await supabase
+      .from("deliveries")
+      .update({ picked_up_at: recordedAt })
+      .in("id", atPickup)
+      .is("picked_up_at", null);
   }
 
   return NextResponse.json({ ok: true, delivery: delivery.id });

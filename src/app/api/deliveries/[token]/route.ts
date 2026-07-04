@@ -27,7 +27,7 @@ export async function GET(
         "origin_label, origin_lat, origin_lng, " +
         "dest_label, dest_lat, dest_lng, " +
         "customer_name, " +
-        "last_lat, last_lng, last_speed, last_position_at, delivered_at, " +
+        "last_lat, last_lng, last_speed, last_position_at, delivered_at, picked_up_at, " +
         "driver:profiles!deliveries_driver_id_fkey(full_name, phone), " +
         "vehicle:vehicles(plate, name)",
     )
