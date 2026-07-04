@@ -18,18 +18,13 @@ const ACTIVE = new Set(["assigned", "en_route"]);
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 /**
- * Google Maps directions deep link through the given stops. Before the trip
- * starts the origin is the pickup; once started it's omitted so Google Maps
- * navigates from the device's current location.
+ * Google Maps directions deep link: origin (null = the device's current
+ * location) through each "lat,lng" point in order, driving mode.
  */
-function googleMapsUrl(
-  stops: Delivery[],
-  started: boolean,
-  pickup: Delivery,
+function googleDirUrl(
+  origin: string | null,
+  pts: string[],
 ): string | null {
-  const pts = stops
-    .filter((d) => d.dest_lat != null && d.dest_lng != null)
-    .map((d) => `${d.dest_lat},${d.dest_lng}`);
   if (pts.length === 0) return null;
   const p = new URLSearchParams({
     api: "1",
@@ -38,11 +33,14 @@ function googleMapsUrl(
   });
   const way = pts.slice(0, -1);
   if (way.length) p.set("waypoints", way.join("|"));
-  if (!started && pickup.origin_lat != null && pickup.origin_lng != null) {
-    p.set("origin", `${pickup.origin_lat},${pickup.origin_lng}`);
-  }
+  if (origin) p.set("origin", origin);
   return `https://www.google.com/maps/dir/?${p.toString()}`;
 }
+
+// Once the driver has come within this distance of the pickup, the trip stops
+// routing through it (they've collected the goods).
+const PICKUP_REACHED_KM = 0.3;
+const pickupReachedKey = (tripKey: string) => `ct_pickup_reached:${tripKey}`;
 
 // Order a group's stops nearest-first from the shared pickup (simple greedy
 // route), so labels A, B, C follow a sensible driving order. Used as a fallback
@@ -218,6 +216,38 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
 
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [gps, setGps] = useState<GpsState>("off");
+
+  // Has the driver collected the goods yet? Auto-detected the first time a GPS
+  // fix lands near the pickup; remembered per trip so a reload doesn't send the
+  // route back through the pickup.
+  const tripKey = stops
+    .map((s) => s.id)
+    .sort()
+    .join(",");
+  const pickupPt =
+    pickup.origin_lat != null && pickup.origin_lng != null
+      ? { lat: pickup.origin_lat, lng: pickup.origin_lng }
+      : null;
+  const [pickupReached, setPickupReached] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(pickupReachedKey(tripKey)))
+        setPickupReached(true);
+    } catch {
+      /* storage unavailable — detection still works within the session */
+    }
+  }, [tripKey]);
+  const markPickupReached = useCallback(() => {
+    setPickupReached(true);
+    try {
+      localStorage.setItem(pickupReachedKey(tripKey), "1");
+    } catch {
+      /* ignore */
+    }
+  }, [tripKey]);
+  const pickupPtRef = useRef(pickupPt);
+  pickupPtRef.current = pickupPt;
+
   const [confirm, setConfirm] = useState<null | "start" | string>(null); // string = stop id to deliver
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -266,13 +296,19 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
     watchRef.current = navigator.geolocation.watchPosition(
       (p) => {
         setGps("on");
-        setPos({ lat: p.coords.latitude, lng: p.coords.longitude });
+        const at = { lat: p.coords.latitude, lng: p.coords.longitude };
+        setPos(at);
+        // Arriving at the pickup flips the route from "via pickup" to
+        // "straight to the stops".
+        const pk = pickupPtRef.current;
+        if (pk && haversineKm(at, pk) <= PICKUP_REACHED_KM)
+          markPickupReached();
         void sendPing(p);
       },
       (err) => setGps(err.code === err.PERMISSION_DENIED ? "denied" : "error"),
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
     );
-  }, [sendPing]);
+  }, [sendPing, markPickupReached]);
 
   // GPS runs while any stop on the trip is en route; stops when all are done.
   useEffect(() => {
@@ -372,18 +408,28 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
       d.dest_lng != null,
   );
   const fromLive = anyEnRoute && live != null;
+  // Haven't collected the goods yet → the route runs current position →
+  // PICKUP → A → B, so directions and times include getting to the pickup.
+  const viaPickup = fromLive && !pickupReached && pickupPt != null;
   const routeStops = fromLive
     ? remaining
     : stops.filter((d) => d.dest_lat != null && d.dest_lng != null);
   const liveKey = fromLive
     ? `${live.lat.toFixed(2)},${live.lng.toFixed(2)}`
     : "";
-  const routeSig = routeStops.map((s) => s.id).join(",") + "|" + liveKey;
+  const routeSig =
+    routeStops.map((s) => s.id).join(",") +
+    "|" +
+    liveKey +
+    (viaPickup ? "|viaP" : "");
   const [route, setRoute] = useState<Array<[number, number]> | undefined>(
     undefined,
   );
   const [etas, setEtas] = useState<Record<string, { sec: number; m: number }>>(
     {},
+  );
+  const [pickupEta, setPickupEta] = useState<{ sec: number; m: number } | null>(
+    null,
   );
   const [total, setTotal] = useState<{ sec: number; m: number } | null>(null);
 
@@ -391,16 +437,18 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
     let cancelled = false;
     const start = fromLive
       ? { lng: live.lng, lat: live.lat }
-      : pickup.origin_lat != null && pickup.origin_lng != null
-        ? { lng: pickup.origin_lng, lat: pickup.origin_lat }
+      : pickupPt
+        ? { lng: pickupPt.lng, lat: pickupPt.lat }
         : null;
     if (!start || routeStops.length === 0) {
       setRoute(undefined);
       setEtas({});
+      setPickupEta(null);
       setTotal(null);
       return;
     }
     const pts: Array<[number, number]> = [[start.lng, start.lat]];
+    if (viaPickup) pts.push([pickupPt!.lng, pickupPt!.lat]);
     routeStops.forEach((d) =>
       pts.push([d.dest_lng as number, d.dest_lat as number]),
     );
@@ -410,6 +458,7 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
         // Routing down — still draw straight segments, just without ETAs.
         setRoute(pts);
         setEtas({});
+        setPickupEta(null);
         setTotal(null);
         return;
       }
@@ -417,12 +466,19 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
       const bySt: Record<string, { sec: number; m: number }> = {};
       let sec = 0;
       let m = 0;
+      // With viaPickup, leg 0 is current → pickup; stops start at leg 1.
+      const offset = viaPickup ? 1 : 0;
       r.legs.forEach((leg, i) => {
         sec += leg.durationSec;
         m += leg.distanceM;
-        const stop = routeStops[i];
+        if (viaPickup && i === 0) {
+          setPickupEta({ sec, m });
+          return;
+        }
+        const stop = routeStops[i - offset];
         if (stop) bySt[stop.id] = { sec, m };
       });
+      if (!viaPickup) setPickupEta(null);
       setEtas(bySt);
       setTotal({ sec, m });
     });
@@ -432,10 +488,15 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeSig]);
 
-  const navUrl = googleMapsUrl(
-    fromLive ? remaining : stops,
-    anyEnRoute,
-    pickup,
+  // Google Maps: not started → preview pickup → all stops. Started → navigate
+  // from the current location, still via the pickup until it's been reached.
+  const navPts = [
+    ...(viaPickup ? [`${pickupPt!.lat},${pickupPt!.lng}`] : []),
+    ...routeStops.map((d) => `${d.dest_lat},${d.dest_lng}`),
+  ];
+  const navUrl = googleDirUrl(
+    anyEnRoute ? null : pickupPt ? `${pickupPt.lat},${pickupPt.lng}` : null,
+    navPts,
   );
 
   const headPill = allDone
@@ -480,11 +541,23 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
         </div>
       ) : null}
 
-      <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5 text-xs">
-        <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
-        <span className="truncate text-muted2">
-          Pickup: {pickup.origin_label ?? "—"}
-        </span>
+      <div className="border-b border-border/60 px-4 py-2.5 text-xs">
+        <div className="flex items-center gap-2">
+          <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
+          <span className="truncate text-muted2">
+            Pickup: {pickup.origin_label ?? "—"}
+          </span>
+        </div>
+        {pickupEta ? (
+          <p className="mt-1 flex items-center gap-1 pl-[22px] text-[11px] font-medium text-blue">
+            <Clock className="h-3 w-3 shrink-0" />~
+            {formatEta(Math.round(pickupEta.sec / 60))} ·{" "}
+            {formatKm(pickupEta.m)}
+            <span className="font-normal text-muted2">
+              to pickup, from your location
+            </span>
+          </p>
+        ) : null}
       </div>
 
       {/* Route summary + open the same route in Google Maps for navigation */}
@@ -557,7 +630,7 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
                   onClick={() => setConfirm(d.id)}
                   className="ct-btn-primary shrink-0 px-2.5 py-1.5 text-xs disabled:opacity-60"
                 >
-                  <Check className="h-3.5 w-3.5" /> Delivered
+                  <Check className="h-3.5 w-3.5" /> Mark as delivered
                 </button>
               ) : (
                 <DeliveryStatusBadge status={status} />

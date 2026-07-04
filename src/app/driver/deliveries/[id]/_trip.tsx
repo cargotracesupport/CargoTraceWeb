@@ -7,7 +7,11 @@ import type { DeliveryStatus } from "@/lib/types";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import { Locate, Check, Clock, Navigation } from "@/components/icons";
 import { roadRouteDetailed } from "@/lib/route";
-import { formatEta, formatKm } from "@/lib/eta";
+import { formatEta, formatKm, haversineKm } from "@/lib/eta";
+
+// Same pickup-visited detection as the trip card: within this distance of the
+// pickup, the driver has collected the goods and routing skips the pickup.
+const PICKUP_REACHED_KM = 0.3;
 
 type Place = { lat: number; lng: number; label: string | null };
 type Pos = { lat: number; lng: number; speed: number | null; heading: number | null };
@@ -39,6 +43,28 @@ export default function DriverTrip({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const watchRef = useRef<number | null>(null);
+
+  // Has the driver collected the goods? Auto-detected when a GPS fix lands near
+  // the pickup; remembered per delivery so a reload doesn't route back to it.
+  const [pickupReached, setPickupReached] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(`ct_pickup_reached:${deliveryId}`))
+        setPickupReached(true);
+    } catch {
+      /* storage unavailable — detection still works within the session */
+    }
+  }, [deliveryId]);
+  const markPickupReached = useCallback(() => {
+    setPickupReached(true);
+    try {
+      localStorage.setItem(`ct_pickup_reached:${deliveryId}`, "1");
+    } catch {
+      /* ignore */
+    }
+  }, [deliveryId]);
+  const originRef = useRef(origin);
+  originRef.current = origin;
 
   const stopGps = useCallback(() => {
     if (watchRef.current != null && typeof navigator !== "undefined") {
@@ -88,6 +114,16 @@ export default function DriverTrip({
           speed: p.coords.speed != null ? p.coords.speed * 3.6 : null,
           heading: p.coords.heading,
         });
+        // Arriving at the pickup flips routing from "via pickup" to "to drop-off".
+        const o = originRef.current;
+        if (
+          o &&
+          haversineKm(
+            { lat: p.coords.latitude, lng: p.coords.longitude },
+            { lat: o.lat, lng: o.lng },
+          ) <= PICKUP_REACHED_KM
+        )
+          markPickupReached();
         void sendPing(p);
       },
       (err) => {
@@ -103,7 +139,7 @@ export default function DriverTrip({
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
     );
-  }, [sendPing]);
+  }, [sendPing, markPickupReached]);
 
   // GPS is tied to the trip being live: it activates the moment the trip starts
   // and auto-resumes if the driver reopens this screen while en route. No manual
@@ -194,9 +230,11 @@ export default function DriverTrip({
           : null;
 
   // Driving ETA to the drop-off: from the live position while en route (throttled
-  // to ~1 km buckets so GPS ticks don't re-hit OSRM), else from the pickup.
+  // to ~1 km buckets so GPS ticks don't re-hit OSRM), else from the pickup. While
+  // the goods haven't been collected the route runs via the pickup first.
   const fromLive = status === "en_route" && pos != null;
-  const etaSig = `${fromLive ? `${pos.lat.toFixed(2)},${pos.lng.toFixed(2)}` : "origin"}|${dest ? `${dest.lat},${dest.lng}` : ""}`;
+  const viaPickup = fromLive && !pickupReached && origin != null;
+  const etaSig = `${fromLive ? `${pos.lat.toFixed(2)},${pos.lng.toFixed(2)}` : "origin"}|${dest ? `${dest.lat},${dest.lng}` : ""}|${viaPickup ? "viaP" : ""}`;
   const [eta, setEta] = useState<{ sec: number; m: number } | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -205,13 +243,18 @@ export default function DriverTrip({
       setEta(null);
       return;
     }
-    roadRouteDetailed([
-      [from.lng, from.lat],
-      [dest.lng, dest.lat],
-    ]).then((r) => {
+    const pts: [number, number][] = [[from.lng, from.lat]];
+    if (viaPickup) pts.push([origin!.lng, origin!.lat]);
+    pts.push([dest.lng, dest.lat]);
+    roadRouteDetailed(pts).then((r) => {
       if (cancelled) return;
-      const leg = r?.legs[0];
-      setEta(leg ? { sec: leg.durationSec, m: leg.distanceM } : null);
+      if (!r) {
+        setEta(null);
+        return;
+      }
+      const sec = r.legs.reduce((n, l) => n + l.durationSec, 0);
+      const m = r.legs.reduce((n, l) => n + l.distanceM, 0);
+      setEta({ sec, m });
     });
     return () => {
       cancelled = true;
@@ -219,13 +262,16 @@ export default function DriverTrip({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etaSig]);
 
-  // Same route in Google Maps: en route → navigate from the current location;
-  // otherwise preview pickup → drop-off.
+  // Same route in Google Maps: en route → navigate from the current location
+  // (via the pickup until it's been visited); otherwise preview pickup → drop-off.
   const navUrl = dest
     ? `https://www.google.com/maps/dir/?${new URLSearchParams({
         api: "1",
         travelmode: "driving",
         destination: `${dest.lat},${dest.lng}`,
+        ...(viaPickup && origin
+          ? { waypoints: `${origin.lat},${origin.lng}` }
+          : {}),
         ...(status !== "en_route" && origin
           ? { origin: `${origin.lat},${origin.lng}` }
           : {}),
@@ -270,7 +316,11 @@ export default function DriverTrip({
                 <Clock className="h-3.5 w-3.5 shrink-0 text-blue" />
                 <span className="text-muted2">
                   ~{formatEta(Math.round(eta.sec / 60))} · {formatKm(eta.m)}
-                  {fromLive ? " from your location" : " pickup → drop-off"}
+                  {fromLive
+                    ? viaPickup
+                      ? " from you, via pickup"
+                      : " from your location"
+                    : " pickup → drop-off"}
                 </span>
               </>
             ) : null}
