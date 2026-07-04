@@ -40,6 +40,12 @@ export function formatEta(minutes: number | null): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+/** "8.4 km" under 10 km, "148 km" above. */
+export function formatKm(meters: number): string {
+  const km = meters / 1000;
+  return km >= 10 ? `${Math.round(km)} km` : `${km.toFixed(1)} km`;
+}
+
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180;
 }

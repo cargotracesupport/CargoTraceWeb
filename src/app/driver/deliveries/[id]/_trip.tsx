@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { DeliveryStatus } from "@/lib/types";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
-import { Locate, Check } from "@/components/icons";
+import { Locate, Check, Clock, Navigation } from "@/components/icons";
+import { roadRouteDetailed } from "@/lib/route";
+import { formatEta, formatKm } from "@/lib/eta";
 
 type Place = { lat: number; lng: number; label: string | null };
 type Pos = { lat: number; lng: number; speed: number | null; heading: number | null };
@@ -191,6 +193,45 @@ export default function DriverTrip({
           ? { dot: "bg-red", text: "text-red", label: "GPS off" }
           : null;
 
+  // Driving ETA to the drop-off: from the live position while en route (throttled
+  // to ~1 km buckets so GPS ticks don't re-hit OSRM), else from the pickup.
+  const fromLive = status === "en_route" && pos != null;
+  const etaSig = `${fromLive ? `${pos.lat.toFixed(2)},${pos.lng.toFixed(2)}` : "origin"}|${dest ? `${dest.lat},${dest.lng}` : ""}`;
+  const [eta, setEta] = useState<{ sec: number; m: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const from = fromLive ? pos : origin;
+    if (!from || !dest) {
+      setEta(null);
+      return;
+    }
+    roadRouteDetailed([
+      [from.lng, from.lat],
+      [dest.lng, dest.lat],
+    ]).then((r) => {
+      if (cancelled) return;
+      const leg = r?.legs[0];
+      setEta(leg ? { sec: leg.durationSec, m: leg.distanceM } : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [etaSig]);
+
+  // Same route in Google Maps: en route → navigate from the current location;
+  // otherwise preview pickup → drop-off.
+  const navUrl = dest
+    ? `https://www.google.com/maps/dir/?${new URLSearchParams({
+        api: "1",
+        travelmode: "driving",
+        destination: `${dest.lat},${dest.lng}`,
+        ...(status !== "en_route" && origin
+          ? { origin: `${origin.lat},${origin.lng}` }
+          : {}),
+      }).toString()}`
+    : null;
+
   return (
     <>
       {/* Map */}
@@ -218,6 +259,32 @@ export default function DriverTrip({
               className={`h-1.5 w-1.5 rounded-full ${gpsPill.dot} ${gps === "on" ? "animate-pulse" : ""}`}
             />
             <span className={gpsPill.text}>{gpsPill.label}</span>
+          </div>
+        ) : null}
+
+        {/* Driving ETA + open the same route in Google Maps */}
+        {eta || navUrl ? (
+          <div className="flex items-center gap-2 border-t border-border px-4 py-2.5 text-xs">
+            {eta ? (
+              <>
+                <Clock className="h-3.5 w-3.5 shrink-0 text-blue" />
+                <span className="text-muted2">
+                  ~{formatEta(Math.round(eta.sec / 60))} · {formatKm(eta.m)}
+                  {fromLive ? " from your location" : " pickup → drop-off"}
+                </span>
+              </>
+            ) : null}
+            {navUrl ? (
+              <a
+                href={navUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ct-btn-ghost ml-auto shrink-0 px-2.5 py-1 text-xs"
+                title="Opens Google Maps for turn-by-turn navigation. Keep this tab open — your live location keeps sharing with the customer and dispatcher."
+              >
+                <Navigation className="h-3.5 w-3.5" /> Google Maps
+              </a>
+            ) : null}
           </div>
         ) : null}
       </div>

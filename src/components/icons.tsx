@@ -151,6 +151,12 @@ export const Clock = (p: IconProps) => (
   </Svg>
 );
 
+export const Navigation = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m3 11 19-8-8 19-2.5-8.5L3 11Z" />
+  </Svg>
+);
+
 export const Locate = (p: IconProps) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="3.2" />

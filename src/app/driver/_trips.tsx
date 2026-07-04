@@ -8,13 +8,41 @@ import type { Delivery, DeliveryStatus } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import Spinner from "@/components/Spinner";
-import { MapPin, Flag, Locate, Check } from "@/components/icons";
+import { MapPin, Flag, Locate, Check, Clock, Navigation } from "@/components/icons";
 import { groupSameRoute, haversineKm, type Pt } from "@/lib/cluster";
 import { groupByRoad, type RouteItem } from "@/lib/routeGroup";
-import { roadRouteThrough } from "@/lib/route";
+import { roadRouteDetailed } from "@/lib/route";
+import { formatEta, formatKm } from "@/lib/eta";
 
 const ACTIVE = new Set(["assigned", "en_route"]);
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/**
+ * Google Maps directions deep link through the given stops. Before the trip
+ * starts the origin is the pickup; once started it's omitted so Google Maps
+ * navigates from the device's current location.
+ */
+function googleMapsUrl(
+  stops: Delivery[],
+  started: boolean,
+  pickup: Delivery,
+): string | null {
+  const pts = stops
+    .filter((d) => d.dest_lat != null && d.dest_lng != null)
+    .map((d) => `${d.dest_lat},${d.dest_lng}`);
+  if (pts.length === 0) return null;
+  const p = new URLSearchParams({
+    api: "1",
+    travelmode: "driving",
+    destination: pts[pts.length - 1],
+  });
+  const way = pts.slice(0, -1);
+  if (way.length) p.set("waypoints", way.join("|"));
+  if (!started && pickup.origin_lat != null && pickup.origin_lng != null) {
+    p.set("origin", `${pickup.origin_lat},${pickup.origin_lng}`);
+  }
+  return `https://www.google.com/maps/dir/?${p.toString()}`;
+}
 
 // Order a group's stops nearest-first from the shared pickup (simple greedy
 // route), so labels A, B, C follow a sensible driving order. Used as a fallback
@@ -332,32 +360,83 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
     markers.push({ id: "you", lng: live.lng, lat: live.lat, label: "You", kind: "truck" });
   }
 
-  // Stitched by-road path pickup → A → B → …
-  const stopKey = stops.map((s) => s.id).join(",");
+  // Route + per-stop driving ETAs. Before the trip starts: pickup → A → B ….
+  // Once en route with a live fix: current position → remaining stops, so the
+  // times read "from where I am now". Live recompute is throttled by rounding
+  // the position to ~1 km so every GPS tick doesn't re-hit OSRM.
+  const remaining = stops.filter(
+    (d) =>
+      st(d) !== "delivered" &&
+      st(d) !== "cancelled" &&
+      d.dest_lat != null &&
+      d.dest_lng != null,
+  );
+  const fromLive = anyEnRoute && live != null;
+  const routeStops = fromLive
+    ? remaining
+    : stops.filter((d) => d.dest_lat != null && d.dest_lng != null);
+  const liveKey = fromLive
+    ? `${live.lat.toFixed(2)},${live.lng.toFixed(2)}`
+    : "";
+  const routeSig = routeStops.map((s) => s.id).join(",") + "|" + liveKey;
   const [route, setRoute] = useState<Array<[number, number]> | undefined>(
     undefined,
   );
+  const [etas, setEtas] = useState<Record<string, { sec: number; m: number }>>(
+    {},
+  );
+  const [total, setTotal] = useState<{ sec: number; m: number } | null>(null);
+
   useEffect(() => {
     let cancelled = false;
-    const pts: Array<[number, number]> = [];
-    if (pickup.origin_lat != null && pickup.origin_lng != null)
-      pts.push([pickup.origin_lng, pickup.origin_lat]);
-    stops.forEach((d) => {
-      if (d.dest_lat != null && d.dest_lng != null)
-        pts.push([d.dest_lng, d.dest_lat]);
-    });
-    if (pts.length < 2) {
+    const start = fromLive
+      ? { lng: live.lng, lat: live.lat }
+      : pickup.origin_lat != null && pickup.origin_lng != null
+        ? { lng: pickup.origin_lng, lat: pickup.origin_lat }
+        : null;
+    if (!start || routeStops.length === 0) {
       setRoute(undefined);
+      setEtas({});
+      setTotal(null);
       return;
     }
-    roadRouteThrough(pts).then((r) => {
-      if (!cancelled) setRoute(r);
+    const pts: Array<[number, number]> = [[start.lng, start.lat]];
+    routeStops.forEach((d) =>
+      pts.push([d.dest_lng as number, d.dest_lat as number]),
+    );
+    roadRouteDetailed(pts).then((r) => {
+      if (cancelled) return;
+      if (!r) {
+        // Routing down — still draw straight segments, just without ETAs.
+        setRoute(pts);
+        setEtas({});
+        setTotal(null);
+        return;
+      }
+      setRoute(r.coords);
+      const bySt: Record<string, { sec: number; m: number }> = {};
+      let sec = 0;
+      let m = 0;
+      r.legs.forEach((leg, i) => {
+        sec += leg.durationSec;
+        m += leg.distanceM;
+        const stop = routeStops[i];
+        if (stop) bySt[stop.id] = { sec, m };
+      });
+      setEtas(bySt);
+      setTotal({ sec, m });
     });
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopKey]);
+  }, [routeSig]);
+
+  const navUrl = googleMapsUrl(
+    fromLive ? remaining : stops,
+    anyEnRoute,
+    pickup,
+  );
 
   const headPill = allDone
     ? { cls: "bg-s3 text-muted2", label: "Completed" }
@@ -408,6 +487,32 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
         </span>
       </div>
 
+      {/* Route summary + open the same route in Google Maps for navigation */}
+      {total || navUrl ? (
+        <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5 text-xs">
+          {total ? (
+            <>
+              <Clock className="h-3.5 w-3.5 shrink-0 text-blue" />
+              <span className="text-muted2">
+                ~{formatEta(Math.round(total.sec / 60))} · {formatKm(total.m)}
+                {fromLive ? " remaining" : " total drive"}
+              </span>
+            </>
+          ) : null}
+          {navUrl ? (
+            <a
+              href={navUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ct-btn-ghost ml-auto shrink-0 px-2.5 py-1 text-xs"
+              title="Opens Google Maps for turn-by-turn navigation. Keep this tab open — your live location keeps sharing with the customer and dispatcher."
+            >
+              <Navigation className="h-3.5 w-3.5" /> Google Maps
+            </a>
+          ) : null}
+        </div>
+      ) : null}
+
       <ul className="divide-y divide-border">
         {stops.map((d, i) => {
           const status = st(d);
@@ -431,6 +536,18 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
                     {d.reference ?? ""}
                     {d.customer_name ? ` · ${d.customer_name}` : ""}
                   </p>
+                  {etas[d.id] &&
+                  status !== "delivered" &&
+                  status !== "cancelled" ? (
+                    <p className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-blue">
+                      <Clock className="h-3 w-3 shrink-0" />~
+                      {formatEta(Math.round(etas[d.id].sec / 60))} ·{" "}
+                      {formatKm(etas[d.id].m)}
+                      <span className="font-normal text-muted2">
+                        {fromLive ? "from your location" : "from pickup"}
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
               </Link>
               {status === "en_route" ? (
