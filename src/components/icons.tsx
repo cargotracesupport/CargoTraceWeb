@@ -151,6 +151,14 @@ export const Clock = (p: IconProps) => (
   </Svg>
 );
 
+export const Home = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="m3 10.5 9-7.5 9 7.5" />
+    <path d="M5 9.5V21h14V9.5" />
+    <path d="M9.5 21v-6h5v6" />
+  </Svg>
+);
+
 export const Navigation = (p: IconProps) => (
   <Svg {...p}>
     <path d="m3 11 19-8-8 19-2.5-8.5L3 11Z" />

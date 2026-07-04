@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import DropoffSetter from "@/components/DropoffSetter";
-import { BrandMark, Wordmark, Check, MapPin, Flag, Truck, Phone, Avatar } from "@/components/icons";
+import { BrandMark, Wordmark, Check, MapPin, Flag, Truck, Phone, Avatar, Home } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
 import { estimateEtaMinutes, formatEta } from "@/lib/eta";
 import { roadRouteThrough } from "@/lib/route";
@@ -55,6 +56,8 @@ export default function CustomerTracker({
 }) {
   const [delivery, setDelivery] = useState<PublicDelivery>(initial);
   const [gone, setGone] = useState(false);
+  // Customer chose "Change drop-off" — re-open the setter over the live view.
+  const [editDropoff, setEditDropoff] = useState(false);
   // Popup shown when the driver/vehicle handling this delivery changes.
   const [changeNotice, setChangeNotice] = useState<{
     driver: string | null;
@@ -160,6 +163,12 @@ export default function CustomerTracker({
     status !== "cancelled" &&
     delivery.dest_lat == null &&
     delivery.dest_lng == null;
+  // The drop-off can be (re)set until the trip starts — same window the
+  // drop-off API accepts (and the DB freeze enforces after start).
+  const canEditDropoff =
+    status === "awaiting_dropoff" ||
+    status === "pending" ||
+    status === "assigned";
   const originPoint =
     delivery.origin_lat != null && delivery.origin_lng != null
       ? { lat: delivery.origin_lat, lng: delivery.origin_lng }
@@ -354,12 +363,68 @@ export default function CustomerTracker({
 
       {/* ── Content (overlaps hero) ───────────────────────────── */}
       <div className="mx-auto -mt-10 flex w-full max-w-2xl flex-1 flex-col gap-4 px-4 pb-6">
-        {needsDropoff ? (
+        {/* Quick actions: the customer home + drop-off */}
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href={`/customer/${token}`}
+            className="ct-btn-ghost justify-center !py-2.5 bg-s1"
+            style={{ boxShadow: "var(--ct-shadow-pop)" }}
+          >
+            <Home className="h-4 w-4" /> Home
+          </Link>
+          {needsDropoff ? (
+            <a
+              href="#dropoff"
+              className="ct-btn-primary justify-center !py-2.5"
+            >
+              <MapPin className="h-4 w-4" /> Drop-off
+            </a>
+          ) : canEditDropoff ? (
+            <button
+              type="button"
+              onClick={() => setEditDropoff((v) => !v)}
+              className="ct-btn-ghost justify-center !py-2.5 bg-s1"
+              style={{ boxShadow: "var(--ct-shadow-pop)" }}
+            >
+              <MapPin className="h-4 w-4" />
+              {editDropoff ? "Keep drop-off" : "Change drop-off"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              title={
+                isDelivered || isCancelled
+                  ? "This delivery is finished."
+                  : "The trip has started — the drop-off can no longer be changed."
+              }
+              className="ct-btn-ghost justify-center !py-2.5 bg-s1 opacity-50"
+            >
+              <MapPin className="h-4 w-4" /> Drop-off locked
+            </button>
+          )}
+        </div>
+
+        {/* Change the drop-off before the trip starts */}
+        {!needsDropoff && editDropoff && canEditDropoff ? (
           <DropoffSetter
             token={token}
             origin={originPoint}
-            onSaved={applyDropoff}
+            onSaved={(lat, lng, label) => {
+              applyDropoff(lat, lng, label);
+              setEditDropoff(false);
+            }}
           />
+        ) : null}
+
+        {needsDropoff ? (
+          <div id="dropoff">
+            <DropoffSetter
+              token={token}
+              origin={originPoint}
+              onSaved={applyDropoff}
+            />
+          </div>
         ) : (
         <>
         {/* Route + reference */}
