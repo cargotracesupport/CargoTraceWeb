@@ -58,6 +58,12 @@ export default function CustomerTracker({
   const [gone, setGone] = useState(false);
   // Customer chose "Change drop-off" — re-open the setter over the live view.
   const [editDropoff, setEditDropoff] = useState(false);
+
+  // Arriving from the home page's "Change drop-off" button: open the editor
+  // straight away. (Renders only while the delivery can still be changed.)
+  useEffect(() => {
+    if (window.location.hash === "#change-dropoff") setEditDropoff(true);
+  }, []);
   // Popup shown when the driver/vehicle handling this delivery changes.
   const [changeNotice, setChangeNotice] = useState<{
     driver: string | null;

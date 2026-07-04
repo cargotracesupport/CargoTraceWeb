@@ -301,17 +301,40 @@ export default function CustomerHome({ token }: { token?: string }) {
                   {onTheWay.length}
                 </span>
               </h2>
-              {onTheWay.map((d) => (
-                <div key={d.tracking_token} className="ct-card p-4">
-                  <Row d={d} />
-                  <Link
-                    href={`/track/${d.tracking_token}`}
-                    className="ct-btn-ghost mt-3 w-full justify-center !py-2.5"
-                  >
-                    <Flag className="h-4 w-4" /> Track this delivery
-                  </Link>
-                </div>
-              ))}
+              {onTheWay.map((d) => {
+                // Drop-off is changeable until the trip starts (same window
+                // the tracker/API allows). En-route deliveries are locked.
+                const canChange =
+                  d.status === "awaiting_dropoff" ||
+                  d.status === "pending" ||
+                  d.status === "assigned";
+                return (
+                  <div key={d.tracking_token} className="ct-card p-4">
+                    <Row d={d} />
+                    <div
+                      className={`mt-3 grid gap-2 ${canChange ? "grid-cols-2" : ""}`}
+                    >
+                      <Link
+                        href={`/track/${d.tracking_token}`}
+                        className="ct-btn-ghost justify-center !py-2.5"
+                      >
+                        <Flag className="h-4 w-4" />
+                        {canChange ? "Track" : "Track this delivery"}
+                      </Link>
+                      {canChange ? (
+                        <Link
+                          // The hash tells the tracker to open the drop-off
+                          // editor straight away.
+                          href={`/track/${d.tracking_token}#change-dropoff`}
+                          className="ct-btn-ghost justify-center !py-2.5"
+                        >
+                          <MapPin className="h-4 w-4" /> Change drop-off
+                        </Link>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
             </section>
           ) : null}
 
