@@ -1,16 +1,21 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { Delivery } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
+import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import { MapPin, Flag } from "@/components/icons";
 import { groupSameRoute, haversineKm, type Pt } from "@/lib/cluster";
+import { groupByRoad, type RouteItem } from "@/lib/routeGroup";
+import { roadRouteThrough } from "@/lib/route";
 
 const ACTIVE = new Set(["assigned", "en_route"]);
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
 // Order a group's stops nearest-first from the shared pickup (simple greedy
-// route), so labels A, B, C follow a sensible driving order.
+// route), so labels A, B, C follow a sensible driving order. Used as a fallback
+// when road routing is unavailable.
 function orderStops(group: Delivery[]): Delivery[] {
   if (group.length <= 1) return group;
   const start: Pt | null =
@@ -48,25 +53,87 @@ export default function DriverTrips({ deliveries }: { deliveries: Delivery[] }) 
     (d) => d.status === "delivered" || d.status === "cancelled",
   );
 
-  const withPts = active
-    .filter(
-      (d) =>
-        d.origin_lat != null &&
-        d.origin_lng != null &&
-        d.dest_lat != null &&
-        d.dest_lng != null,
-    )
-    .map((d) => ({
+  // Regroup only when the active set actually changes.
+  const activeSig = useMemo(
+    () =>
+      JSON.stringify(
+        active.map((d) => [
+          d.id,
+          d.status,
+          d.origin_lat,
+          d.origin_lng,
+          d.dest_lat,
+          d.dest_lng,
+        ]),
+      ),
+    [active],
+  );
+
+  const withPts = useMemo(
+    () =>
+      active.filter(
+        (d) =>
+          d.origin_lat != null &&
+          d.origin_lng != null &&
+          d.dest_lat != null &&
+          d.dest_lng != null,
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeSig],
+  );
+  const singles = useMemo(
+    () =>
+      active
+        .filter((d) => d.origin_lat == null || d.dest_lat == null)
+        .map((d) => [d]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeSig],
+  );
+
+  // Instant straight-line grouping — shown immediately and used as a fallback
+  // whenever road routing is unavailable.
+  const fallbackGroups = useMemo(() => {
+    const items = withPts.map((d) => ({
       delivery: d,
       origin: { lat: d.origin_lat as number, lng: d.origin_lng as number },
       dest: { lat: d.dest_lat as number, lng: d.dest_lng as number },
     }));
-  const grouped = groupSameRoute(withPts).map((g) =>
-    orderStops(g.map((x) => x.delivery)),
-  );
-  const singles = active
-    .filter((d) => d.origin_lat == null || d.dest_lat == null)
-    .map((d) => [d]);
+    return groupSameRoute(items).map((g) =>
+      orderStops(g.map((x) => x.delivery)),
+    );
+  }, [withPts]);
+
+  // Accurate grouping by real driving detour (OSRM) — matches the dispatch
+  // board, so a driver's assigned same-route stops appear as one trip.
+  const [roadGroups, setRoadGroups] = useState<Delivery[][] | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (withPts.length < 2) {
+      setRoadGroups(null);
+      return;
+    }
+    const items: RouteItem<Delivery>[] = withPts.map((d) => ({
+      id: d.id,
+      origin: { lat: d.origin_lat as number, lng: d.origin_lng as number },
+      dest: { lat: d.dest_lat as number, lng: d.dest_lng as number },
+      ref: d,
+    }));
+    groupByRoad(items)
+      .then((groups) => {
+        if (cancelled) return;
+        setRoadGroups(groups ? groups.map((g) => g.map((it) => it.ref)) : null);
+      })
+      .catch(() => {
+        if (!cancelled) setRoadGroups(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSig]);
+
+  const grouped = roadGroups ?? fallbackGroups;
   const trips = [...grouped, ...singles];
 
   return (
@@ -99,6 +166,74 @@ export default function DriverTrips({ deliveries }: { deliveries: Delivery[] }) 
 
 function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
   const anyMoving = stops.some((s) => s.status === "en_route");
+  const pickup = stops[0];
+
+  // Map markers: pickup + each drop-off lettered A/B/C in visiting order, plus
+  // the driver's live position (any en-route stop carries the fanned-out fix).
+  const markers: MapMarker[] = [];
+  if (pickup.origin_lat != null && pickup.origin_lng != null) {
+    markers.push({
+      id: "origin",
+      lng: pickup.origin_lng,
+      lat: pickup.origin_lat,
+      label: pickup.origin_label ?? "Pickup",
+      kind: "origin",
+    });
+  }
+  stops.forEach((d, i) => {
+    if (d.dest_lat != null && d.dest_lng != null) {
+      markers.push({
+        id: d.id,
+        lng: d.dest_lng,
+        lat: d.dest_lat,
+        label: d.dest_label ?? undefined,
+        kind: "dest",
+        badge: LETTERS[i] ?? "•",
+      });
+    }
+  });
+  const live = stops
+    .filter((s) => s.last_lat != null && s.last_lng != null)
+    .sort((a, b) =>
+      (b.last_position_at ?? "").localeCompare(a.last_position_at ?? ""),
+    )[0];
+  if (anyMoving && live?.last_lat != null && live?.last_lng != null) {
+    markers.push({
+      id: "you",
+      lng: live.last_lng,
+      lat: live.last_lat,
+      label: "You",
+      kind: "truck",
+    });
+  }
+
+  // Stitched by-road path pickup → A → B → …
+  const stopKey = stops.map((s) => s.id).join(",");
+  const [route, setRoute] = useState<Array<[number, number]> | undefined>(
+    undefined,
+  );
+  useEffect(() => {
+    let cancelled = false;
+    const pts: Array<[number, number]> = [];
+    if (pickup.origin_lat != null && pickup.origin_lng != null)
+      pts.push([pickup.origin_lng, pickup.origin_lat]);
+    stops.forEach((d) => {
+      if (d.dest_lat != null && d.dest_lng != null)
+        pts.push([d.dest_lng, d.dest_lat]);
+    });
+    if (pts.length < 2) {
+      setRoute(undefined);
+      return;
+    }
+    roadRouteThrough(pts).then((r) => {
+      if (!cancelled) setRoute(r);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopKey]);
+
   return (
     <div className="ct-card overflow-hidden">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -118,10 +253,22 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
         )}
       </div>
 
+      {/* Whole-trip map: pickup + lettered stops in road order */}
+      {markers.length > 1 ? (
+        <div className="h-[220px] w-full border-b border-border">
+          <LiveMap
+            markers={markers}
+            route={route}
+            className="h-full w-full"
+            fit
+          />
+        </div>
+      ) : null}
+
       <div className="flex items-center gap-2 border-b border-border/60 px-4 py-2.5 text-xs">
         <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
         <span className="truncate text-muted2">
-          Pickup: {stops[0].origin_label ?? "—"}
+          Pickup: {pickup.origin_label ?? "—"}
         </span>
       </div>
 

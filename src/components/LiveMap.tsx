@@ -17,6 +17,8 @@ export interface MapMarker {
   lat: number;
   label?: string;
   kind?: "truck" | "origin" | "dest";
+  /** Optional letter/number shown on the marker (e.g. stop order A, B, C). */
+  badge?: string;
 }
 
 // Dimensional "3D-style" map markers: a green truck for the live vehicle, a blue
@@ -35,8 +37,18 @@ const MARKER_SVG: Record<NonNullable<MapMarker["kind"]>, string> = {
 function makeMarkerEl(m: MapMarker): HTMLElement {
   const el = document.createElement("div");
   el.style.cssText =
-    "cursor:pointer;line-height:0;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.25));";
+    "position:relative;cursor:pointer;line-height:0;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.25));";
   el.innerHTML = MARKER_SVG[m.kind ?? "truck"];
+  if (m.badge) {
+    const b = document.createElement("div");
+    b.textContent = m.badge;
+    b.style.cssText =
+      "position:absolute;top:-7px;left:50%;transform:translateX(-50%);" +
+      "min-width:17px;height:17px;padding:0 3px;border-radius:9999px;" +
+      "background:#0e3a57;color:#fff;font:700 11px/17px system-ui,sans-serif;" +
+      "text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.35);";
+    el.appendChild(b);
+  }
   if (m.label) el.title = m.label;
   return el;
 }

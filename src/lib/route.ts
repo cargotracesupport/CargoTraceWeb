@@ -29,3 +29,34 @@ export async function roadRoute(from: LngLat, to: LngLat): Promise<LngLat[]> {
   }
   return straight;
 }
+
+/**
+ * By-road driving path through an ordered list of waypoints (pickup → A → B …),
+ * as one [lng, lat] polyline. Falls back to straight segments joining the points
+ * if routing is unavailable, so the map always draws something.
+ */
+export async function roadRouteThrough(points: LngLat[]): Promise<LngLat[]> {
+  if (points.length < 2) return points;
+  const key = "via:" + points.map((p) => `${p[0]},${p[1]}`).join(";");
+  const cached = cache.get(key);
+  if (cached) return cached;
+
+  try {
+    const coordStr = points.map((p) => `${p[0]},${p[1]}`).join(";");
+    const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const json = (await res.json()) as {
+        routes?: { geometry?: { coordinates?: LngLat[] } }[];
+      };
+      const coords = json.routes?.[0]?.geometry?.coordinates;
+      if (Array.isArray(coords) && coords.length >= 2) {
+        cache.set(key, coords);
+        return coords;
+      }
+    }
+  } catch {
+    /* network/CORS error — fall through to straight segments */
+  }
+  return points;
+}
