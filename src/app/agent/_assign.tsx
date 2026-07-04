@@ -535,7 +535,7 @@ function RouteGroupCard({
               <Spinner /> Assigning {doneCount}/{group.length}…
             </>
           ) : (
-            `Assign ${group.length} to driver`
+            "Assign to driver"
           )}
         </button>
       </div>
