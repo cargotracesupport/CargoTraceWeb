@@ -6,10 +6,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { mapStyleUrl } from "@/lib/maptiler";
 import { roadRoute } from "@/lib/route";
 
-// Camera tilt (degrees) for the 3D "moving" navigation view — the billboard
-// markers (warehouse, truck) stand upright on the tilted ground plane. Kept on
-// every camera move (init / fit / fly) so the 3D feel is consistent.
-const PITCH = 50;
+// Default camera tilt: flat / top-down. Markers then sit exactly on their
+// coordinates and wide multi-stop routes read cleanly. Callers can pass a
+// `pitch` prop to opt back into a tilted 3D view for a single close-up.
+const PITCH = 0;
 
 export interface MapMarker {
   id: string;
@@ -36,10 +36,17 @@ const MARKER_SVG: Record<NonNullable<MapMarker["kind"]>, string> = {
 /** Build a dimensional 3D-style marker element for the given point. */
 function makeMarkerEl(m: MapMarker): HTMLElement {
   const el = document.createElement("div");
+  // Do NOT set `position` here — MapLibre relies on its own
+  // `.maplibregl-marker { position:absolute }`; overriding it makes the marker
+  // a full-width block and the pin drifts off its coordinate.
   el.style.cssText =
-    "position:relative;cursor:pointer;line-height:0;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.25));";
-  el.innerHTML = MARKER_SVG[m.kind ?? "truck"];
+    "cursor:pointer;line-height:0;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.25));";
   if (m.badge) {
+    // Shrink-wrapping inline-block wrapper gives the badge a positioning context
+    // without disturbing the marker root's absolute placement.
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "position:relative;display:inline-block;line-height:0;";
+    wrap.innerHTML = MARKER_SVG[m.kind ?? "truck"];
     const b = document.createElement("div");
     b.textContent = m.badge;
     b.style.cssText =
@@ -47,7 +54,10 @@ function makeMarkerEl(m: MapMarker): HTMLElement {
       "min-width:17px;height:17px;padding:0 3px;border-radius:9999px;" +
       "background:#0e3a57;color:#fff;font:700 11px/17px system-ui,sans-serif;" +
       "text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.35);";
-    el.appendChild(b);
+    wrap.appendChild(b);
+    el.appendChild(wrap);
+  } else {
+    el.innerHTML = MARKER_SVG[m.kind ?? "truck"];
   }
   if (m.label) el.title = m.label;
   return el;
