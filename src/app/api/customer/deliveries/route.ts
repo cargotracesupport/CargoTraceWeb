@@ -24,11 +24,16 @@ type DeliveryRow = {
   delivered_at: string | null;
 };
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * Customer home "login": the mobile number plus any one delivery reference
- * booked with it are the credentials. On a match, returns every delivery for
- * that number (their own bookings) with the tracking links.
- * POST { phone, reference }
+ * Customer home "login". Two ways in, both returning every delivery booked
+ * with the customer's number (with tracking links):
+ *  - POST { token }              — a delivery's tracking-link token (the link
+ *    itself is the credential, same as the tracking page)
+ *  - POST { phone, reference }   — the booked mobile number plus any one of
+ *    their delivery references
  */
 export async function POST(req: Request) {
   let body: Record<string, unknown>;
@@ -38,33 +43,65 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
 
-  const phone = String(body.phone ?? "").trim();
+  const token = String(body.token ?? "").trim();
   const reference = String(body.reference ?? "").trim();
-  if (normPhone(phone).length < 6) {
-    return NextResponse.json(
-      { error: "Enter a valid mobile number." },
-      { status: 400 },
-    );
-  }
-  if (!reference) {
-    return NextResponse.json(
-      { error: "Enter one of your delivery reference numbers." },
-      { status: 400 },
-    );
-  }
+  let phone = String(body.phone ?? "").trim();
 
   const supabase = createAdminClient();
 
-  const { data: allowed } = await supabase.rpc("rate_limit_hit", {
-    p_key: `custhome:${normPhone(phone)}`,
-    p_limit: RL_LIMIT,
-    p_window_seconds: RL_WINDOW_S,
-  });
-  if (allowed === false) {
-    return NextResponse.json(
-      { error: "Too many attempts. Please wait a minute and try again." },
-      { status: 429, headers: { "Retry-After": String(RL_WINDOW_S) } },
-    );
+  if (token) {
+    // ── Token login: resolve the delivery's phone; the link is the proof. ──
+    if (!UUID_RE.test(token)) {
+      return NextResponse.json({ error: "invalid link" }, { status: 403 });
+    }
+    const { data: allowed } = await supabase.rpc("rate_limit_hit", {
+      p_key: `custhome:tok:${token}`,
+      p_limit: RL_LIMIT,
+      p_window_seconds: RL_WINDOW_S,
+    });
+    if (allowed === false) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please wait a minute and try again." },
+        { status: 429, headers: { "Retry-After": String(RL_WINDOW_S) } },
+      );
+    }
+    const { data: d } = await supabase
+      .from("deliveries")
+      .select("customer_phone")
+      .eq("tracking_token", token)
+      .maybeSingle();
+    if (!d?.customer_phone) {
+      return NextResponse.json(
+        { error: "This link couldn't load your deliveries." },
+        { status: 403 },
+      );
+    }
+    phone = d.customer_phone;
+  } else {
+    // ── Phone + reference login. ──────────────────────────────────────────
+    if (normPhone(phone).length < 6) {
+      return NextResponse.json(
+        { error: "Enter a valid mobile number." },
+        { status: 400 },
+      );
+    }
+    if (!reference) {
+      return NextResponse.json(
+        { error: "Enter one of your delivery reference numbers." },
+        { status: 400 },
+      );
+    }
+    const { data: allowed } = await supabase.rpc("rate_limit_hit", {
+      p_key: `custhome:${normPhone(phone)}`,
+      p_limit: RL_LIMIT,
+      p_window_seconds: RL_WINDOW_S,
+    });
+    if (allowed === false) {
+      return NextResponse.json(
+        { error: "Too many attempts. Please wait a minute and try again." },
+        { status: 429, headers: { "Retry-After": String(RL_WINDOW_S) } },
+      );
+    }
   }
 
   const { data, error } = await supabase.rpc("deliveries_for_customer_phone", {
@@ -79,10 +116,12 @@ export async function POST(req: Request) {
   }
 
   const rows = (data ?? []) as (DeliveryRow & Record<string, unknown>)[];
-  // The reference must belong to one of this number's deliveries — that pairing
-  // is the proof it's really the customer (same 403 whether the phone or the
-  // reference is wrong, so nothing can be probed).
-  const verified = rows.some((r) => normRef(r.reference ?? "") === normRef(reference));
+  // Phone+reference path: the reference must belong to one of this number's
+  // deliveries — that pairing is the proof it's really the customer (same 403
+  // whether the phone or the reference is wrong, so nothing can be probed).
+  const verified =
+    !!token ||
+    rows.some((r) => normRef(r.reference ?? "") === normRef(reference));
   if (!verified) {
     return NextResponse.json(
       { error: "That number and reference don't match any delivery." },
