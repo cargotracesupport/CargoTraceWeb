@@ -14,6 +14,7 @@ import type {
 import { STATUS_LABEL } from "@/lib/types";
 import LocationPicker, { type LatLng } from "@/components/LocationPicker";
 import Spinner from "@/components/Spinner";
+import { whatsappUrl } from "@/lib/share";
 
 // Statuses an admin can set by hand when editing a delivery.
 const EDITABLE_STATUSES: DeliveryStatus[] = [
@@ -32,11 +33,6 @@ interface Created {
   reference: string;
 }
 
-/** Click-to-chat WhatsApp link prefilled with the message (agent taps to send). */
-function whatsappUrl(phone: string, message: string): string {
-  const digits = phone.replace(/\D/g, "");
-  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`;
-}
 
 function trackUrl(token: string): string {
   const base =

@@ -4,7 +4,11 @@ import type { Delivery } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import SimulateButton from "@/components/SimulateButton";
 import DeleteButton from "@/components/DeleteButton";
+import WhatsAppLink from "@/components/WhatsAppLink";
+import { trackShareMessage } from "@/lib/share";
 import { Plus, Pencil, Locate } from "@/components/icons";
+
+const APP_BASE = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
 
 type DeliveryRow = Delivery & {
   driver: { full_name: string | null } | null;
@@ -49,8 +53,22 @@ function Th({
 }
 
 function RowActions({ d }: { d: DeliveryRow }) {
+  const done = d.status === "delivered" || d.status === "cancelled";
   return (
     <div className="flex items-center justify-end gap-1">
+      {!done ? (
+        <WhatsAppLink
+          phone={d.customer_phone}
+          label="Send"
+          title="Send the tracking link to the customer on WhatsApp"
+          message={trackShareMessage({
+            name: d.customer_name,
+            reference: d.reference,
+            url: `${APP_BASE}/track/${d.tracking_token}`,
+            needsDropoff: d.dest_lat == null || d.dest_lng == null,
+          })}
+        />
+      ) : null}
       <Link
         href={`/admin/deliveries/${d.id}/edit`}
         title="Edit delivery"
