@@ -5,76 +5,15 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { mapStyleUrl } from "@/lib/maptiler";
 import { roadRoute } from "@/lib/route";
+import { hasGoogleMaps } from "@/lib/google";
+import GoogleLiveMap from "@/components/GoogleLiveMap";
+import { makeMarkerEl, isValidLngLat } from "@/components/mapMarkers";
+import type { LiveMapProps } from "@/components/liveMapTypes";
 
-// Default camera tilt: flat / top-down. Markers then sit exactly on their
-// coordinates and wide multi-stop routes read cleanly. Callers can pass a
-// `pitch` prop to opt back into a tilted 3D view for a single close-up.
+export type { MapMarker } from "@/components/liveMapTypes";
+
+// Default camera tilt: flat / top-down.
 const PITCH = 0;
-
-export interface MapMarker {
-  id: string;
-  lng: number;
-  lat: number;
-  label?: string;
-  kind?: "truck" | "origin" | "dest";
-  /** Optional letter/number shown on the marker (e.g. stop order A, B, C). */
-  badge?: string;
-}
-
-// Dimensional "3D-style" map markers: a green truck for the live vehicle, a blue
-// warehouse for the pickup (origin), an amber person pin for the customer (dest).
-// Two-tone shading + a ground-shadow ellipse give each a placed-on-the-map feel.
-const MARKER_SVG: Record<NonNullable<MapMarker["kind"]>, string> = {
-  truck:
-    '<svg width="46" height="38" viewBox="0 0 46 38" xmlns="http://www.w3.org/2000/svg"><ellipse cx="23" cy="34.5" rx="16" ry="2.8" fill="rgba(0,0,0,0.22)"/><rect x="3" y="9" width="24" height="16" rx="2" fill="#00c853"/><rect x="3" y="9" width="24" height="4.5" rx="2" fill="#1aff90"/><path d="M27 13h6.5l5.5 5.5V25H27z" fill="#00a14e"/><path d="M27 13h6.5l5.5 5.5H27z" fill="#0bbf63"/><rect x="30" y="15" width="6.5" height="4.8" rx="1" fill="#cdeffd"/><rect x="3" y="24.5" width="36" height="2.2" fill="#00733a"/><circle cx="12.5" cy="28" r="4.2" fill="#16212c"/><circle cx="12.5" cy="28" r="1.6" fill="#9fb1c0"/><circle cx="32" cy="28" r="4.2" fill="#16212c"/><circle cx="32" cy="28" r="1.6" fill="#9fb1c0"/></svg>',
-  origin:
-    '<svg width="44" height="42" viewBox="0 0 44 42" xmlns="http://www.w3.org/2000/svg"><ellipse cx="22" cy="38.5" rx="16" ry="2.8" fill="rgba(0,0,0,0.22)"/><path d="M4 18 22 7 40 18Z" fill="#2a86b8"/><path d="M22 7 40 18 22 18Z" fill="#1f6f9e"/><rect x="7" y="18" width="30" height="18" fill="#40c4ff"/><rect x="30" y="18" width="7" height="18" fill="#2f9bd1"/><rect x="14.5" y="23" width="12" height="13" rx="1" fill="#0e3a57"/><rect x="14.5" y="25" width="12" height="1.5" fill="#15527d"/><rect x="14.5" y="28.5" width="12" height="1.5" fill="#15527d"/><rect x="14.5" y="32" width="12" height="1.5" fill="#15527d"/></svg>',
-  dest:
-    '<svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg"><ellipse cx="16" cy="39" rx="6.5" ry="2.4" fill="rgba(0,0,0,0.22)"/><path d="M16 1.5C8 1.5 2.5 7.4 2.5 14.2 2.5 23 16 36 16 36S29.5 23 29.5 14.2C29.5 7.4 24 1.5 16 1.5Z" fill="#ffb74d"/><path d="M26.6 7C28.4 9 29.5 11.5 29.5 14.2 29.5 23 16 36 16 36 18.4 28 24 21 26 16.5 27.6 12.8 27.2 9.4 26.6 7Z" fill="#ef9f2c"/><circle cx="16" cy="11.5" r="3.6" fill="#fff"/><path d="M9.5 21.5a6.5 6 0 0 1 13 0Z" fill="#fff"/></svg>',
-};
-
-/** Build a dimensional 3D-style marker element for the given point. */
-function makeMarkerEl(m: MapMarker): HTMLElement {
-  const el = document.createElement("div");
-  // Do NOT set `position` here — MapLibre relies on its own
-  // `.maplibregl-marker { position:absolute }`; overriding it makes the marker
-  // a full-width block and the pin drifts off its coordinate.
-  el.style.cssText =
-    "cursor:pointer;line-height:0;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.25));";
-  if (m.badge) {
-    // Shrink-wrapping inline-block wrapper gives the badge a positioning context
-    // without disturbing the marker root's absolute placement.
-    const wrap = document.createElement("div");
-    wrap.style.cssText = "position:relative;display:inline-block;line-height:0;";
-    wrap.innerHTML = MARKER_SVG[m.kind ?? "truck"];
-    const b = document.createElement("div");
-    b.textContent = m.badge;
-    b.style.cssText =
-      "position:absolute;top:-7px;left:50%;transform:translateX(-50%);" +
-      "min-width:17px;height:17px;padding:0 3px;border-radius:9999px;" +
-      "background:#0e3a57;color:#fff;font:700 11px/17px system-ui,sans-serif;" +
-      "text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.35);";
-    wrap.appendChild(b);
-    el.appendChild(wrap);
-  } else {
-    el.innerHTML = MARKER_SVG[m.kind ?? "truck"];
-  }
-  if (m.label) el.title = m.label;
-  return el;
-}
-
-// Guard against bad data: MapLibre throws on out-of-range coordinates, which
-// would crash the whole page. Anything invalid is simply skipped.
-function isValidLngLat(lng: number, lat: number): boolean {
-  return (
-    Number.isFinite(lng) &&
-    Number.isFinite(lat) &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lng >= -180 &&
-    lng <= 180
-  );
-}
 
 const ROUTE_SOURCE = "route";
 const ROUTE_LAYER = "route-line";
@@ -121,10 +60,16 @@ function setRouteLine(
 
 /**
  * Reusable live map. Renders markers (truck / origin / destination) and, when a
- * direction is given, a solid by-road route line A→B. Invalid coordinates are
- * ignored so bad data never crashes the map. Used by Admin, Driver and Customer.
+ * direction is given, a solid by-road route line. Uses Google Maps when a Google
+ * key is configured, else the free MapLibre map. Same props either way.
  */
-export default function LiveMap({
+export default function LiveMap(props: LiveMapProps) {
+  if (hasGoogleMaps()) return <GoogleLiveMap {...props} />;
+  return <MapLibreLiveMap {...props} />;
+}
+
+/** MapLibre + MapTiler map — the free default (used when no Google key is set). */
+function MapLibreLiveMap({
   markers,
   route,
   roadFrom,
@@ -134,22 +79,7 @@ export default function LiveMap({
   className,
   fit = true,
   pitch = PITCH,
-}: {
-  markers: MapMarker[];
-  route?: Array<[number, number]>;
-  /** When set, the map draws the by-road driving route from A→B (falls back to a line). */
-  roadFrom?: [number, number];
-  roadTo?: [number, number];
-  /** Fly the camera to this point (e.g. a selected driver) instead of fitting all markers. */
-  focus?: { lng: number; lat: number; zoom?: number };
-  /** Re-fly only when this key changes (e.g. the selected delivery id), not on every position tick. */
-  focusKey?: string;
-  className?: string;
-  fit?: boolean;
-  /** Camera tilt. Defaults to the 3D navigation view; pass 0 for a flat, top-down
-   *  overview (better for wide multi-stop maps spanning long distances). */
-  pitch?: number;
-}) {
+}: LiveMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
@@ -200,7 +130,6 @@ export default function LiveMap({
         marker.setLngLat([m.lng, m.lat]);
       }
     }
-    // remove stale (incl. markers that became invalid)
     for (const [id, marker] of markersRef.current) {
       if (!seen.has(id)) {
         marker.remove();
@@ -208,27 +137,19 @@ export default function LiveMap({
       }
     }
 
-    // When a specific point is focused (a selected driver), the focus effect
-    // drives the camera — don't also fit to the whole route.
     if (fit && !focus && valid.length > 0) {
       const bounds = new maplibregl.LngLatBounds();
       valid.forEach((m) => bounds.extend([m.lng, m.lat]));
-      // Fit flat (no pitch here — fitting bounds *at* a tilt over-zooms); the
-      // camera keeps the 3D pitch set at init / re-applied below.
       map.fitBounds(bounds, { padding: 60, maxZoom: 14, duration: 600 });
       if (Math.round(map.getPitch()) !== pitch) map.setPitch(pitch);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markers, fit]);
 
-  // Fly to a focused point (e.g. the selected driver) at a close zoom, only when
-  // focusKey changes — so picking a delivery navigates accurately to its driver.
+  // Fly to a focused point, only when focusKey changes.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !focus) return;
-    // flyTo only moves the camera (no style/tiles needed), so call it directly.
-    // Gating on isStyleLoaded()/once("load") can silently miss because the map's
-    // "load" event has already fired by the time a delivery is selected.
     map.flyTo({
       center: [focus.lng, focus.lat],
       zoom: focus.zoom ?? 13,
@@ -239,11 +160,8 @@ export default function LiveMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey]);
 
-  // Stable dependency key (a deps array must keep a constant size across renders).
   const routeKey = JSON.stringify({ route, roadFrom, roadTo });
 
-  // Sync the route line. When roadFrom/roadTo are given, fetch the by-road
-  // driving path (falls back to a straight line); otherwise draw `route`.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -261,8 +179,6 @@ export default function LiveMap({
       return route;
     }
 
-    // addSource/addLayer need a loaded style. Gating on once("load") can miss
-    // when the style already loaded, so poll via styledata until ready.
     function whenStyleReady(cb: () => void) {
       if (!map) return;
       if (map.isStyleLoaded()) {
