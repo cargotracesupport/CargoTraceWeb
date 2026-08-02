@@ -1,6 +1,6 @@
-// Google Maps configuration + a tiny client-side loader. Everything here is
-// OPTIONAL: with no keys the app falls back to MapLibre (display) and OSRM
-// (routing), so it keeps working until the keys are added to the environment.
+// Google Maps configuration + a tiny client-side loader. Map display is powered
+// by Google Maps — the browser key + Map ID below are required. Routing uses the
+// Google Routes API when GOOGLE_ROUTES_KEY is set, and falls back to OSRM if not.
 //
 // Keys (set in .env.local locally AND in Vercel → Project → Environment Variables):
 //   NEXT_PUBLIC_GOOGLE_MAPS_KEY  browser key, HTTP-referrer restricted (Maps JS)
@@ -10,7 +10,7 @@
 export const GOOGLE_MAPS_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY ?? "";
 export const GOOGLE_MAP_ID = process.env.NEXT_PUBLIC_GOOGLE_MAP_ID ?? "";
 
-/** Is the browser Maps key configured? Drives the MapLibre→Google switch. */
+/** Is the browser Maps key configured? */
 export function hasGoogleMaps(): boolean {
   return GOOGLE_MAPS_KEY.length > 0;
 }

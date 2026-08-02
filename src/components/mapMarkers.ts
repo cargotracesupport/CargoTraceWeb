@@ -1,6 +1,5 @@
-// Marker artwork + a couple of guards, shared by the MapLibre and Google map
-// implementations. makeMarkerEl returns a DOM element used as the marker content
-// in both (MapLibre custom marker element / Google AdvancedMarkerElement content).
+// Marker artwork + a couple of guards for the Google map. makeMarkerEl returns a
+// DOM element used as the marker content (Google AdvancedMarkerElement content).
 
 import type { MapMarker } from "@/components/liveMapTypes";
 
@@ -18,8 +17,8 @@ export const MARKER_SVG: Record<NonNullable<MapMarker["kind"]>, string> = {
 /** Build a dimensional 3D-style marker element for the given point. */
 export function makeMarkerEl(m: MapMarker): HTMLElement {
   const el = document.createElement("div");
-  // Do NOT set `position` on the root — MapLibre relies on its own absolute
-  // positioning; overriding it makes the marker a full-width block.
+  // Do NOT set `position` on the root — the map anchors the marker itself;
+  // overriding it makes the marker a full-width block.
   el.style.cssText =
     "cursor:pointer;line-height:0;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.25));";
   if (m.badge) {

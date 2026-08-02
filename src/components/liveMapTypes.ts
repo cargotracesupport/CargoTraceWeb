@@ -1,5 +1,4 @@
-// Shared shape for the map component, implemented by both the MapLibre map (free
-// default) and the Google Maps map (when a Google key is configured).
+// Shared shape for the map component (implemented by the Google Maps map).
 
 export interface MapMarker {
   id: string;

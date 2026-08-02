@@ -8,10 +8,9 @@ import type { LiveMapProps } from "@/components/liveMapTypes";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// Google Maps implementation of the shared LiveMap interface. Renders the same
-// truck / warehouse / lettered-stop markers, route polyline and camera behaviour
-// as the MapLibre map, so callers don't change. Used only when a Google Maps key
-// is configured (LiveMap dispatches); otherwise MapLibre is used.
+// Google Maps implementation of the shared LiveMap interface. Renders the
+// truck / warehouse / lettered-stop markers, route polyline and camera
+// behaviour for the live map. Requires the Google Maps key + Map ID.
 export default function GoogleLiveMap({
   markers,
   route,
