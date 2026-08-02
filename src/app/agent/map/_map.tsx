@@ -12,6 +12,10 @@ import {
   Flag,
 } from "@/components/icons";
 import { estimateEtaMinutes, formatEta } from "@/lib/eta";
+import { useNow } from "@/components/useNow";
+import { presenceOf } from "@/lib/presence";
+import { useSelectedRoute } from "@/components/useSelectedRoute";
+import OfflineSummary from "@/components/OfflineSummary";
 
 export type DeliveryRow = Delivery & {
   driver?: { full_name: string | null } | null;
@@ -38,7 +42,7 @@ function timeAgo(iso: string | null): string {
 
 // One marker per delivery for each known location (truck = last GPS,
 // origin = pickup, dest = drop-off). Mirrors the admin dashboard pattern.
-function markersFor(list: DeliveryRow[]): MapMarker[] {
+function markersFor(list: DeliveryRow[], now: number): MapMarker[] {
   const out: MapMarker[] = [];
   for (const d of list) {
     if (d.last_lat != null && d.last_lng != null) {
@@ -48,6 +52,7 @@ function markersFor(list: DeliveryRow[]): MapMarker[] {
         lng: d.last_lng,
         label: d.reference ?? "Driver",
         kind: "truck",
+        state: presenceOf(d, now),
       });
     }
     if (d.origin_lat != null && d.origin_lng != null) {
@@ -81,6 +86,7 @@ export default function AgentMap({
 }) {
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>(initial);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const now = useNow();
 
   // Realtime: keep the map and list in sync with delivery changes. RLS limits
   // events to this agent's deliveries — the channel name is unique to this page
@@ -135,18 +141,11 @@ export default function AgentMap({
   // Selected → show only that delivery's pins + by-road route. Otherwise show
   // the whole active fleet for this agent.
   const markers = useMemo(
-    () => markersFor(selected ? [selected] : deliveries),
-    [deliveries, selected],
+    () => markersFor(selected ? [selected] : deliveries, now),
+    [deliveries, selected, now],
   );
 
-  const roadFrom: [number, number] | undefined =
-    selected && selected.origin_lat != null && selected.origin_lng != null
-      ? [selected.origin_lng, selected.origin_lat]
-      : undefined;
-  const roadTo: [number, number] | undefined =
-    selected && selected.dest_lat != null && selected.dest_lng != null
-      ? [selected.dest_lng, selected.dest_lat]
-      : undefined;
+  const { route, roadFrom, roadTo } = useSelectedRoute(selected);
 
   // Fly to the driver's live position when available; fall back to origin/dest.
   const focus = !selected
@@ -168,11 +167,14 @@ export default function AgentMap({
         </p>
       </div>
 
+      <OfflineSummary deliveries={deliveries} now={now} onSelect={setSelectedId} />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
         <div className="ct-card relative overflow-hidden">
           <div className="h-[60vh] w-full lg:h-[calc(100vh-16rem)]">
             <LiveMap
               markers={markers}
+              route={route}
               roadFrom={roadFrom}
               roadTo={roadTo}
               focus={focus}

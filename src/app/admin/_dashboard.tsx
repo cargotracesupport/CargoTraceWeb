@@ -18,6 +18,10 @@ import {
   UserCog,
 } from "@/components/icons";
 import { estimateEtaMinutes, formatEta } from "@/lib/eta";
+import { useNow } from "@/components/useNow";
+import { presenceOf } from "@/lib/presence";
+import { useSelectedRoute } from "@/components/useSelectedRoute";
+import OfflineSummary from "@/components/OfflineSummary";
 
 export type DeliveryRow = Delivery & {
   driver?: { full_name: string | null } | null;
@@ -47,7 +51,7 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function markersFor(list: DeliveryRow[]): MapMarker[] {
+function markersFor(list: DeliveryRow[], now: number): MapMarker[] {
   const out: MapMarker[] = [];
   for (const d of list) {
     if (d.last_lat != null && d.last_lng != null) {
@@ -57,6 +61,7 @@ function markersFor(list: DeliveryRow[]): MapMarker[] {
         lng: d.last_lng,
         label: d.reference ?? "Driver",
         kind: "truck",
+        state: presenceOf(d, now),
       });
     }
     if (d.origin_lat != null && d.origin_lng != null) {
@@ -90,6 +95,7 @@ export default function Dashboard({
 }) {
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>(initial);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const now = useNow();
 
   useEffect(() => {
     const supabase = createClient();
@@ -139,18 +145,11 @@ export default function Dashboard({
   // When a delivery is selected the map shows only its pins + driver and fits to
   // them (navigating to that driver); otherwise it shows the whole active fleet.
   const markers = useMemo(
-    () => markersFor(selected ? [selected] : deliveries),
-    [deliveries, selected],
+    () => markersFor(selected ? [selected] : deliveries, now),
+    [deliveries, selected, now],
   );
 
-  const roadFrom: [number, number] | undefined =
-    selected && selected.origin_lat != null && selected.origin_lng != null
-      ? [selected.origin_lng, selected.origin_lat]
-      : undefined;
-  const roadTo: [number, number] | undefined =
-    selected && selected.dest_lat != null && selected.dest_lng != null
-      ? [selected.dest_lng, selected.dest_lat]
-      : undefined;
+  const { route, roadFrom, roadTo } = useSelectedRoute(selected);
 
   // Fly to the selected driver (or its origin/dest) at a close zoom.
   const focus = !selected
@@ -177,6 +176,7 @@ export default function Dashboard({
 
   return (
     <div className="flex flex-col gap-4">
+      <OfflineSummary deliveries={deliveries} now={now} onSelect={setSelectedId} />
       {/* Stat tiles */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {tiles.map((t) => (
@@ -221,6 +221,7 @@ export default function Dashboard({
           <div className="h-[60vh] w-full lg:h-[calc(100vh-16rem)]">
             <LiveMap
               markers={markers}
+              route={route}
               roadFrom={roadFrom}
               roadTo={roadTo}
               focus={focus}

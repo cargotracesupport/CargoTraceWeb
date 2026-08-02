@@ -8,6 +8,8 @@ export interface MapMarker {
   kind?: "truck" | "origin" | "dest";
   /** Optional letter/number shown on the marker (e.g. stop order A, B, C). */
   badge?: string;
+  /** Live driver state for a truck marker (drives the status dot + offline dimming). */
+  state?: "moving" | "idle" | "offline" | "nosignal";
 }
 
 export interface LiveMapProps {
