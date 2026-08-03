@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps, GOOGLE_MAP_ID } from "@/lib/google";
 import { MapPin, Flag, Search } from "@/components/icons";
+import { parseCoords, looksLikeUrl } from "@/lib/location";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -65,6 +66,7 @@ export default function LocationPicker({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GeoResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     activeRef.current = active;
@@ -171,38 +173,75 @@ export default function LocationPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [origin, dest, ready]);
 
+  function placePoint(lat: number, lng: number, label: string | null) {
+    onPickRef.current(active, { lat, lng, label: label ?? undefined });
+    setResults([]);
+    setQuery("");
+    setNote(null);
+    const map = mapRef.current;
+    if (map) {
+      map.panTo({ lat, lng });
+      map.setZoom(15);
+    }
+  }
+
   async function runSearch() {
     const q = query.trim();
-    const geocoder = geocoderRef.current;
-    if (!q || !geocoder) return;
+    if (!q) return;
     setSearching(true);
+    setNote(null);
     try {
+      // "11.2588, 75.7804" → drop the pin immediately.
+      const coords = parseCoords(q);
+      if (coords) {
+        placePoint(coords.lat, coords.lng, null);
+        return;
+      }
+      // A Google Maps link (short share link or full URL) → resolve to
+      // coordinates server-side (short links are redirects with no coords).
+      if (looksLikeUrl(q)) {
+        const res = await fetch("/api/resolve-location", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ input: q }),
+        });
+        const j = (await res.json().catch(() => null)) as {
+          lat?: number;
+          lng?: number;
+        } | null;
+        if (res.ok && j && typeof j.lat === "number" && typeof j.lng === "number") {
+          placePoint(j.lat, j.lng, null);
+        } else {
+          setNote(
+            "Couldn't read that link — paste the address, or drop a pin on the map.",
+          );
+        }
+        return;
+      }
+      // Otherwise treat it as an address (Google Geocoding).
+      const geocoder = geocoderRef.current;
+      if (!geocoder) return;
       const { results: res } = await geocoder.geocode({ address: q });
-      setResults(
-        (res ?? []).slice(0, 5).map((r: any, i: number) => ({
-          id: r.place_id ?? String(i),
-          place_name: r.formatted_address,
-          lat: r.geometry.location.lat(),
-          lng: r.geometry.location.lng(),
-        })),
-      );
+      const list: GeoResult[] = (res ?? []).slice(0, 5).map((r: any, i: number) => ({
+        id: r.place_id ?? String(i),
+        place_name: r.formatted_address,
+        lat: r.geometry.location.lat(),
+        lng: r.geometry.location.lng(),
+      }));
+      setResults(list);
+      if (list.length === 0) {
+        setNote("No match found — try another address, a Maps link, or drop a pin.");
+      }
     } catch {
-      // ZERO_RESULTS / request denied → clear the list
       setResults([]);
+      setNote("Search failed. Please try again, or drop a pin on the map.");
     } finally {
       setSearching(false);
     }
   }
 
   function chooseResult(r: GeoResult) {
-    onPickRef.current(active, { lat: r.lat, lng: r.lng, label: r.place_name });
-    setResults([]);
-    setQuery("");
-    const map = mapRef.current;
-    if (map) {
-      map.panTo({ lat: r.lat, lng: r.lng });
-      map.setZoom(13);
-    }
+    placePoint(r.lat, r.lng, r.place_name);
   }
 
   const activeLabel = active === "origin" ? "pickup (A)" : "drop-off (B)";
@@ -241,7 +280,7 @@ export default function LocationPicker({
                 runSearch();
               }
             }}
-            placeholder={`Search a place for ${activeLabel}…`}
+            placeholder={`Address, Maps link or lat,lng for ${activeLabel}…`}
             className="ct-input"
           />
           <button
@@ -274,6 +313,9 @@ export default function LocationPicker({
             ))}
           </ul>
         )}
+        {note ? (
+          <p className="mt-1 text-xs text-amber">{note}</p>
+        ) : null}
       </div>
 
       {/* the map */}
