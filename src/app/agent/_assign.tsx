@@ -9,6 +9,7 @@ import Link from "next/link";
 import { Avatar, MapPin, Flag, Package, Check, Search, Truck, Plus, Pencil } from "@/components/icons";
 import { groupSameRoute } from "@/lib/cluster";
 import { groupByRoad, type RouteItem } from "@/lib/routeGroup";
+import { formatVehicleSpecs } from "@/lib/vehicle";
 
 // Details are editable only until the trip starts (matches the DB freeze).
 const CAN_EDIT = new Set(["awaiting_dropoff", "pending", "assigned"]);
@@ -31,7 +32,14 @@ export type DriverOption = {
   full_name: string | null;
   vehicle_id: string | null;
 };
-export type VehicleOption = { id: string; plate: string | null; name: string | null };
+export type VehicleOption = {
+  id: string;
+  plate: string | null;
+  name: string | null;
+  length_m: number | null;
+  width_m: number | null;
+  capacity_kg: number | null;
+};
 
 const DONE = new Set(["delivered", "cancelled"]);
 // A delivery can still be (re)assigned only while pending or assigned.
@@ -65,6 +73,15 @@ export default function AssignConsole({
       if (!id) return null;
       const v = vehicles.find((x) => x.id === id);
       return v ? (v.plate ?? v.name ?? "Vehicle") : null;
+    },
+    [vehicles],
+  );
+
+  const vehicleSpecs = useCallback(
+    (id: string | null) => {
+      if (!id) return null;
+      const v = vehicles.find((x) => x.id === id);
+      return v ? formatVehicleSpecs(v) : null;
     },
     [vehicles],
   );
@@ -338,6 +355,7 @@ export default function AssignConsole({
                 vehicles={vehicles}
                 driverName={driverName}
                 vehicleLabel={vehicleLabel}
+                vehicleSpecs={vehicleSpecs}
                 busyByDriver={busyByDriver}
                 onAssigned={patchRow}
               />
@@ -354,6 +372,7 @@ export default function AssignConsole({
                   vehicles={vehicles}
                   driverName={driverName}
                   vehicleLabel={vehicleLabel}
+                  vehicleSpecs={vehicleSpecs}
                   busyByDriver={busyByDriver}
                   onAssigned={patchRow}
                 />
@@ -585,6 +604,7 @@ function DeliveryRow({
   vehicles,
   driverName,
   vehicleLabel,
+  vehicleSpecs,
   busyByDriver,
   onAssigned,
 }: {
@@ -593,6 +613,7 @@ function DeliveryRow({
   vehicles: VehicleOption[];
   driverName: (id: string | null) => string | null;
   vehicleLabel: (id: string | null) => string | null;
+  vehicleSpecs: (id: string | null) => string | null;
   busyByDriver: Map<
     string,
     { status: string; reference: string | null; deliveryId: string }
@@ -684,6 +705,11 @@ function DeliveryRow({
           {currentVehicle ? (
             <span className="inline-flex items-center gap-1 font-mono text-xs text-muted2">
               <Truck className="h-3.5 w-3.5" /> {currentVehicle}
+            </span>
+          ) : null}
+          {vehicleSpecs(delivery.vehicle_id) ? (
+            <span className="text-[11px] font-medium text-primary">
+              {vehicleSpecs(delivery.vehicle_id)}
             </span>
           ) : null}
         </div>

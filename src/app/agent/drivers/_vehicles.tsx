@@ -8,6 +8,8 @@ import Spinner from "@/components/Spinner";
 import DeleteButton from "@/components/DeleteButton";
 import { Truck, Pencil } from "@/components/icons";
 import { CardHeader, EmptyState, FormError } from "@/components/people";
+import VehicleDimensionFields from "@/components/VehicleDimensionFields";
+import { formatVehicleSpecs } from "@/lib/vehicle";
 
 export default function VehiclesManager({
   orgId,
@@ -25,6 +27,9 @@ export default function VehiclesManager({
 
   const [number, setNumber] = useState("");
   const [model, setModel] = useState("");
+  const [lengthM, setLengthM] = useState("");
+  const [widthM, setWidthM] = useState("");
+  const [capacityKg, setCapacityKg] = useState("");
 
   async function addVehicle(e: React.FormEvent) {
     e.preventDefault();
@@ -37,6 +42,9 @@ export default function VehiclesManager({
       plate,
       name: model.trim() || plate, // name is NOT NULL — default to the number
       agent_id: agentId, // the agent owns vehicles they create (RLS requires it)
+      length_m: lengthM ? Number(lengthM) : null,
+      width_m: widthM ? Number(widthM) : null,
+      capacity_kg: capacityKg ? Number(capacityKg) : null,
     });
     setBusy(false);
     if (err) {
@@ -45,6 +53,9 @@ export default function VehiclesManager({
     }
     setNumber("");
     setModel("");
+    setLengthM("");
+    setWidthM("");
+    setCapacityKg("");
     setOpen(false);
     router.refresh();
   }
@@ -92,6 +103,14 @@ export default function VehiclesManager({
               className="ct-input"
             />
           </div>
+          <VehicleDimensionFields
+            length={lengthM}
+            width={widthM}
+            capacity={capacityKg}
+            onLength={setLengthM}
+            onWidth={setWidthM}
+            onCapacity={setCapacityKg}
+          />
 
           {error ? <FormError message={error} /> : null}
 
@@ -127,10 +146,18 @@ function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
   const [error, setError] = useState<string | null>(null);
   const [number, setNumber] = useState(vehicle.plate ?? "");
   const [model, setModel] = useState(vehicle.name ?? "");
+  const [lengthM, setLengthM] = useState(vehicle.length_m?.toString() ?? "");
+  const [widthM, setWidthM] = useState(vehicle.width_m?.toString() ?? "");
+  const [capacityKg, setCapacityKg] = useState(
+    vehicle.capacity_kg?.toString() ?? "",
+  );
 
   function reset() {
     setNumber(vehicle.plate ?? "");
     setModel(vehicle.name ?? "");
+    setLengthM(vehicle.length_m?.toString() ?? "");
+    setWidthM(vehicle.width_m?.toString() ?? "");
+    setCapacityKg(vehicle.capacity_kg?.toString() ?? "");
     setError(null);
   }
 
@@ -142,7 +169,13 @@ function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
     const supabase = createClient();
     const { error: err } = await supabase
       .from("vehicles")
-      .update({ plate, name: model.trim() || plate })
+      .update({
+        plate,
+        name: model.trim() || plate,
+        length_m: lengthM ? Number(lengthM) : null,
+        width_m: widthM ? Number(widthM) : null,
+        capacity_kg: capacityKg ? Number(capacityKg) : null,
+      })
       .eq("id", vehicle.id);
     setBusy(false);
     if (err) {
@@ -171,6 +204,14 @@ function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
             placeholder="Make / model (optional)"
             className="ct-input"
             aria-label="Make or model"
+          />
+          <VehicleDimensionFields
+            length={lengthM}
+            width={widthM}
+            capacity={capacityKg}
+            onLength={setLengthM}
+            onWidth={setWidthM}
+            onCapacity={setCapacityKg}
           />
           {error ? <FormError message={error} /> : null}
           <div className="flex gap-2">
@@ -211,6 +252,11 @@ function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
         </p>
         {vehicle.plate && vehicle.name && vehicle.name !== vehicle.plate ? (
           <p className="text-xs text-muted2">{vehicle.name}</p>
+        ) : null}
+        {formatVehicleSpecs(vehicle) ? (
+          <p className="mt-0.5 text-[11px] font-medium text-primary">
+            {formatVehicleSpecs(vehicle)}
+          </p>
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">
