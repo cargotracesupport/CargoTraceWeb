@@ -39,6 +39,9 @@ export interface Vehicle {
   name: string;
   plate: string | null;
   agent_id: string | null;
+  length_m: number | null;
+  width_m: number | null;
+  capacity_kg: number | null;
   created_at: string;
 }
 

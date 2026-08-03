@@ -22,7 +22,7 @@ export default async function AgentUnassignedPage() {
       .order("full_name", { ascending: true }),
     supabase
       .from("vehicles")
-      .select("id, plate, name")
+      .select("id, plate, name, length_m, width_m, capacity_kg")
       .order("plate", { ascending: true }),
   ]);
 

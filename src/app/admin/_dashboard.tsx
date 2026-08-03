@@ -22,10 +22,19 @@ import { useNow } from "@/components/useNow";
 import { presenceOf } from "@/lib/presence";
 import { useSelectedRoute } from "@/components/useSelectedRoute";
 import OfflineSummary from "@/components/OfflineSummary";
+import { formatVehicleSpecs } from "@/lib/vehicle";
+
+export type VehicleJoin = {
+  name: string | null;
+  plate: string | null;
+  length_m: number | null;
+  width_m: number | null;
+  capacity_kg: number | null;
+};
 
 export type DeliveryRow = Delivery & {
   driver?: { full_name: string | null } | null;
-  vehicle?: { name: string | null; plate: string | null } | null;
+  vehicle?: VehicleJoin | null;
   agent?: { full_name: string | null } | null;
 };
 
@@ -403,6 +412,11 @@ function DeliveryDetail({ d, onBack }: { d: DeliveryRow; onBack: () => void }) {
               <div className="mt-1 inline-flex items-center gap-1 font-mono text-xs text-muted2">
                 <Truck className="h-3.5 w-3.5" />
                 {d.vehicle.plate ?? d.vehicle.name}
+              </div>
+            ) : null}
+            {formatVehicleSpecs(d.vehicle) ? (
+              <div className="mt-0.5 text-[11px] font-medium text-primary">
+                {formatVehicleSpecs(d.vehicle)}
               </div>
             ) : null}
           </div>

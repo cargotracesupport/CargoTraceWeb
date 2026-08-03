@@ -15,7 +15,7 @@ export default async function AgentMapPage() {
   const { data: active } = await supabase
     .from("deliveries")
     .select(
-      "*, driver:profiles!deliveries_driver_id_fkey(full_name), vehicle:vehicles(name, plate)",
+      "*, driver:profiles!deliveries_driver_id_fkey(full_name), vehicle:vehicles(name, plate, length_m, width_m, capacity_kg)",
     )
     .in("status", ["awaiting_dropoff", "assigned", "en_route"])
     .order("created_at", { ascending: false });

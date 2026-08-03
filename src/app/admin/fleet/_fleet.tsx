@@ -8,6 +8,8 @@ import Spinner from "@/components/Spinner";
 import DeleteButton from "@/components/DeleteButton";
 import { Truck, Package, Users, Pencil } from "@/components/icons";
 import { PeopleCard, CardHeader, EmptyState, FormError } from "@/components/people";
+import VehicleDimensionFields from "@/components/VehicleDimensionFields";
+import { formatVehicleSpecs } from "@/lib/vehicle";
 
 type AgentOpt = { id: string; full_name: string | null };
 
@@ -70,6 +72,9 @@ function VehiclesCard({
   const [name, setName] = useState("");
   const [plate, setPlate] = useState("");
   const [ownerAgentId, setOwnerAgentId] = useState("");
+  const [lengthM, setLengthM] = useState("");
+  const [widthM, setWidthM] = useState("");
+  const [capacityKg, setCapacityKg] = useState("");
 
   async function addVehicle(e: React.FormEvent) {
     e.preventDefault();
@@ -81,6 +86,9 @@ function VehiclesCard({
       name: name.trim(),
       plate: plate.trim() || null,
       agent_id: ownerAgentId || null,
+      length_m: lengthM ? Number(lengthM) : null,
+      width_m: widthM ? Number(widthM) : null,
+      capacity_kg: capacityKg ? Number(capacityKg) : null,
     });
     setBusy(false);
     if (err) {
@@ -90,6 +98,9 @@ function VehiclesCard({
     setName("");
     setPlate("");
     setOwnerAgentId("");
+    setLengthM("");
+    setWidthM("");
+    setCapacityKg("");
     setOpen(false);
     router.refresh();
   }
@@ -137,6 +148,14 @@ function VehiclesCard({
               className="ct-input font-mono"
             />
           </div>
+          <VehicleDimensionFields
+            length={lengthM}
+            width={widthM}
+            capacity={capacityKg}
+            onLength={setLengthM}
+            onWidth={setWidthM}
+            onCapacity={setCapacityKg}
+          />
           <div>
             <label className="ct-label" htmlFor="vehicle_owner">
               Owner agent (optional)
@@ -198,11 +217,19 @@ function AdminVehicleRow({
   const [name, setName] = useState(vehicle.name ?? "");
   const [plate, setPlate] = useState(vehicle.plate ?? "");
   const [ownerAgentId, setOwnerAgentId] = useState(vehicle.agent_id ?? "");
+  const [lengthM, setLengthM] = useState(vehicle.length_m?.toString() ?? "");
+  const [widthM, setWidthM] = useState(vehicle.width_m?.toString() ?? "");
+  const [capacityKg, setCapacityKg] = useState(
+    vehicle.capacity_kg?.toString() ?? "",
+  );
 
   function reset() {
     setName(vehicle.name ?? "");
     setPlate(vehicle.plate ?? "");
     setOwnerAgentId(vehicle.agent_id ?? "");
+    setLengthM(vehicle.length_m?.toString() ?? "");
+    setWidthM(vehicle.width_m?.toString() ?? "");
+    setCapacityKg(vehicle.capacity_kg?.toString() ?? "");
     setError(null);
   }
 
@@ -217,6 +244,9 @@ function AdminVehicleRow({
         name: name.trim() || plate.trim(),
         plate: plate.trim() || null,
         agent_id: ownerAgentId || null,
+        length_m: lengthM ? Number(lengthM) : null,
+        width_m: widthM ? Number(widthM) : null,
+        capacity_kg: capacityKg ? Number(capacityKg) : null,
       })
       .eq("id", vehicle.id);
     setBusy(false);
@@ -246,6 +276,14 @@ function AdminVehicleRow({
             placeholder="Plate (optional)"
             className="ct-input font-mono"
             aria-label="Plate"
+          />
+          <VehicleDimensionFields
+            length={lengthM}
+            width={widthM}
+            capacity={capacityKg}
+            onLength={setLengthM}
+            onWidth={setWidthM}
+            onCapacity={setCapacityKg}
           />
           <label className="ct-label" htmlFor={`veh-owner-${vehicle.id}`}>
             Owner agent
@@ -304,6 +342,11 @@ function AdminVehicleRow({
         ) : (
           <p className="text-xs text-muted">No plate</p>
         )}
+        {formatVehicleSpecs(vehicle) ? (
+          <p className="mt-0.5 text-[11px] font-medium text-primary">
+            {formatVehicleSpecs(vehicle)}
+          </p>
+        ) : null}
         <p className="text-[11px] text-muted">
           {ownerName(agents, vehicle.agent_id)
             ? `Agent: ${ownerName(agents, vehicle.agent_id)}`
