@@ -33,6 +33,7 @@ export type DeliveryRow = Delivery & {
 // be assigned and reporting GPS while the customer sets the destination.
 const ACTIVE: Delivery["status"][] = [
   "awaiting_dropoff",
+  "pending",
   "assigned",
   "en_route",
 ];

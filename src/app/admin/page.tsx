@@ -11,7 +11,7 @@ export default async function AdminDashboardPage() {
     .select(
       "*, driver:profiles!deliveries_driver_id_fkey(full_name), vehicle:vehicles(name, plate, length_m, width_m, capacity_kg), agent:profiles!deliveries_agent_id_fkey(full_name)",
     )
-    .in("status", ["assigned", "en_route"])
+    .in("status", ["awaiting_dropoff", "pending", "assigned", "en_route"])
     .order("created_at", { ascending: false });
 
   // All deliveries (status + delivered_at only) for simple counts.

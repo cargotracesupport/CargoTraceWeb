@@ -48,7 +48,12 @@ interface Counts {
   agents: number;
 }
 
-const ACTIVE: Delivery["status"][] = ["assigned", "en_route"];
+const ACTIVE: Delivery["status"][] = [
+  "awaiting_dropoff",
+  "pending",
+  "assigned",
+  "en_route",
+];
 
 function timeAgo(iso: string | null): string {
   if (!iso) return "no signal";
