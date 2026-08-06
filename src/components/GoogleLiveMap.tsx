@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps, GOOGLE_MAP_ID } from "@/lib/google";
 import { roadRoute } from "@/lib/route";
-import { makeMarkerEl, isValidLngLat } from "@/components/mapMarkers";
+import {
+  markerIcon,
+  svgToDataUri,
+  iconKey,
+  isValidLngLat,
+} from "@/components/mapMarkers";
 import type { LiveMapProps } from "@/components/liveMapTypes";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -76,27 +81,25 @@ export default function GoogleLiveMap({
     for (const m of valid) {
       seen.add(m.id);
       const pos = { lat: m.lat, lng: m.lng };
+      const spec = markerIcon(m);
+      const icon = {
+        url: svgToDataUri(spec.svg),
+        scaledSize: new g.Size(spec.w, spec.h),
+        anchor: new g.Point(spec.ax, spec.ay),
+      };
+      const key = iconKey(m);
       let obj = markerObjs.current.get(m.id);
       if (!obj) {
-        const Advanced = g.marker?.AdvancedMarkerElement;
-        if (Advanced && GOOGLE_MAP_ID) {
-          obj = new Advanced({ map, position: pos, content: makeMarkerEl(m) });
-        } else {
-          // No Map ID → classic marker; the letter goes in the marker label.
-          obj = new g.Marker({
-            map,
-            position: pos,
-            title: m.label,
-            label: m.badge
-              ? { text: m.badge, color: "#fff", fontWeight: "700" }
-              : undefined,
-          });
-        }
+        // Classic Marker renders on any map (no Vector Map ID needed).
+        obj = new g.Marker({ map, position: pos, icon, title: m.label });
+        obj.__iconKey = key;
         markerObjs.current.set(m.id, obj);
-      } else if (typeof obj.setPosition === "function") {
-        obj.setPosition(pos);
       } else {
-        obj.position = pos;
+        obj.setPosition(pos);
+        if (obj.__iconKey !== key) {
+          obj.setIcon(icon);
+          obj.__iconKey = key;
+        }
       }
     }
     for (const [id, obj] of markerObjs.current) {
