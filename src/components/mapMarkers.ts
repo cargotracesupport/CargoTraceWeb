@@ -1,105 +1,88 @@
-// Marker artwork + a couple of guards for the Google map. makeMarkerEl returns a
-// DOM element used as the marker content (Google AdvancedMarkerElement content).
+// Map marker artwork. Rendered as classic google.maps.Marker icons (SVG data
+// URIs) so they show on ANY map — unlike AdvancedMarkerElement, which silently
+// renders nothing unless the Map ID is a Vector map. Clean, Google-style pins:
+// a blue pickup pin, a red drop-off (home) pin, and a coloured live-vehicle disc.
 
 import type { MapMarker } from "@/components/liveMapTypes";
 
-// 3D-style map markers built from gradients + a ground shadow: a green delivery
-// truck for the live vehicle, a blue warehouse for the pickup (origin), and an
-// amber house for the customer (drop-off).
-export const MARKER_SVG: Record<NonNullable<MapMarker["kind"]>, string> = {
-  truck:
-    '<svg width="52" height="42" viewBox="0 0 52 42" xmlns="http://www.w3.org/2000/svg">' +
-    '<defs>' +
-    '<linearGradient id="tkBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4dea86"/><stop offset="1" stop-color="#00b24a"/></linearGradient>' +
-    '<linearGradient id="tkCab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#22cf6c"/><stop offset="1" stop-color="#00983f"/></linearGradient>' +
-    '<linearGradient id="tkGlass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaf9ff"/><stop offset="1" stop-color="#a9d8ee"/></linearGradient>' +
-    '</defs>' +
-    '<ellipse cx="26" cy="38" rx="19" ry="3" fill="rgba(0,0,0,0.22)"/>' +
-    '<rect x="4" y="8" width="29" height="21" rx="3" fill="url(#tkBody)"/>' +
-    '<rect x="4" y="8" width="29" height="6" rx="3" fill="#7cefa6" opacity="0.55"/>' +
-    '<path d="M33 13h7l6.5 6.5V29H33z" fill="url(#tkCab)"/>' +
-    '<path d="M34.5 15h5l4.8 4.8h-9.8z" fill="url(#tkGlass)"/>' +
-    '<rect x="4" y="28.5" width="42.5" height="3" rx="1.5" fill="#006e2f"/>' +
-    '<circle cx="15" cy="32" r="4.8" fill="#18232f"/><circle cx="15" cy="32" r="2" fill="#9fb3c4"/>' +
-    '<circle cx="37" cy="32" r="4.8" fill="#18232f"/><circle cx="37" cy="32" r="2" fill="#9fb3c4"/>' +
-    '</svg>',
-  origin:
-    '<svg width="48" height="44" viewBox="0 0 48 44" xmlns="http://www.w3.org/2000/svg">' +
-    '<defs>' +
-    '<linearGradient id="whWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#63cdff"/><stop offset="1" stop-color="#2f9bd1"/></linearGradient>' +
-    '<linearGradient id="whRoof" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a97c9"/><stop offset="1" stop-color="#1f6f9e"/></linearGradient>' +
-    '</defs>' +
-    '<ellipse cx="24" cy="40.5" rx="16" ry="2.8" fill="rgba(0,0,0,0.22)"/>' +
-    '<path d="M7 19 24 9 41 19 41 23 7 23Z" fill="url(#whRoof)"/>' +
-    '<path d="M24 9 41 19 24 19Z" fill="#1b628c"/>' +
-    '<rect x="8" y="23" width="32" height="16.5" rx="1.5" fill="url(#whWall)"/>' +
-    '<rect x="17" y="26.5" width="14" height="13" rx="1" fill="#0e3a57"/>' +
-    '<rect x="17" y="28.5" width="14" height="1.6" fill="#1a6294"/>' +
-    '<rect x="17" y="31.5" width="14" height="1.6" fill="#1a6294"/>' +
-    '<rect x="17" y="34.5" width="14" height="1.6" fill="#1a6294"/>' +
-    '</svg>',
-  dest:
-    '<svg width="44" height="46" viewBox="0 0 44 46" xmlns="http://www.w3.org/2000/svg">' +
-    '<defs>' +
-    '<linearGradient id="hsWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffd889"/><stop offset="1" stop-color="#f0a92e"/></linearGradient>' +
-    '<linearGradient id="hsRoof" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff9366"/><stop offset="1" stop-color="#e5502e"/></linearGradient>' +
-    '</defs>' +
-    '<ellipse cx="22" cy="42.5" rx="14" ry="2.6" fill="rgba(0,0,0,0.22)"/>' +
-    '<rect x="9" y="20" width="26" height="21" rx="1.5" fill="url(#hsWall)"/>' +
-    '<path d="M22 6 39.5 21 4.5 21Z" fill="url(#hsRoof)"/>' +
-    '<path d="M22 6 39.5 21 22 21Z" fill="#cf4526"/>' +
-    '<rect x="18.5" y="28" width="7.5" height="13" rx="1" fill="#7a3d12"/>' +
-    '<circle cx="24.5" cy="35" r="0.9" fill="#ffe1a3"/>' +
-    '<rect x="11.5" y="24.5" width="6" height="6" rx="1" fill="#eaf9ff"/>' +
-    '</svg>',
+export interface MarkerIcon {
+  svg: string;
+  /** rendered size */
+  w: number;
+  h: number;
+  /** anchor point (the spot that sits on the coordinate) */
+  ax: number;
+  ay: number;
+}
+
+const XMLNS = 'xmlns="http://www.w3.org/2000/svg"';
+
+// A teardrop location pin with a white disc holding a glyph (or a letter badge).
+function pin(gradId: string, from: string, to: string, glyphColor: string, glyph: string, badge?: string): string {
+  const center = badge
+    ? `<text x="20" y="21.5" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="700" font-size="12" fill="${glyphColor}">${badge}</text>`
+    : glyph;
+  return (
+    `<svg ${XMLNS} width="40" height="52" viewBox="0 0 40 52">` +
+    `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs>` +
+    `<ellipse cx="20" cy="49.5" rx="5" ry="1.9" fill="rgba(0,0,0,0.28)"/>` +
+    `<path d="M20 1.5C11.4 1.5 4.5 8.4 4.5 17 4.5 28 20 49 20 49 20 49 35.5 28 35.5 17 35.5 8.4 28.6 1.5 20 1.5Z" fill="url(#${gradId})" stroke="#fff" stroke-width="1.6"/>` +
+    `<circle cx="20" cy="17.5" r="9" fill="#fff"/>` +
+    center +
+    `</svg>`
+  );
+}
+
+// Live-vehicle disc, coloured by state (green moving / amber idle / grey offline).
+function vehicleDisc(gradId: string, from: string, to: string): string {
+  return (
+    `<svg ${XMLNS} width="38" height="42" viewBox="0 0 38 42">` +
+    `<defs><linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs>` +
+    `<ellipse cx="19" cy="38" rx="8.5" ry="2.4" fill="rgba(0,0,0,0.25)"/>` +
+    `<circle cx="19" cy="18" r="15.5" fill="url(#${gradId})" stroke="#fff" stroke-width="2.2"/>` +
+    // white truck glyph
+    `<g fill="#fff"><rect x="9.5" y="13" width="10.5" height="9" rx="1.2"/>` +
+    `<path d="M20 15.4h4.2l3.6 3.6V22H20z"/>` +
+    `<rect x="21" y="16.6" width="3.4" height="2.4" rx="0.5" fill="rgba(255,255,255,0.6)"/></g>` +
+    `<circle cx="14" cy="23.2" r="2.3" fill="#1c2831"/><circle cx="24.3" cy="23.2" r="2.3" fill="#1c2831"/>` +
+    `</svg>`
+  );
+}
+
+const ORIGIN_GLYPH =
+  '<g fill="#1f6f9e"><path d="M20 11.7 25.4 14 20 16.3 14.6 14Z"/><path d="M14.4 14.8 19.3 16.9v5.7L14.4 20.5Z"/><path d="M25.6 14.8 20.7 16.9v5.7l4.9-2.1Z" opacity="0.85"/></g>';
+
+const DEST_GLYPH =
+  '<g fill="#c33f22"><path d="M20 11.2 27.4 17.4H12.6Z"/><rect x="14.6" y="17.2" width="10.8" height="5.9" rx="0.6"/></g><rect x="18.1" y="19.1" width="3.8" height="4" fill="#fff"/>';
+
+const VEHICLE_GRAD: Record<NonNullable<MapMarker["state"]> | "default", [string, string]> = {
+  moving: ["#2fd36f", "#12a150"],
+  idle: ["#f6b93b", "#e08d0b"],
+  offline: ["#a3adb6", "#6b747c"],
+  nosignal: ["#a3adb6", "#6b747c"],
+  default: ["#2fd36f", "#12a150"],
 };
 
-const DOT_COLOR: Record<NonNullable<MapMarker["state"]>, string> = {
-  moving: "#22c55e",
-  idle: "#f59e0b",
-  offline: "#ef4444",
-  nosignal: "#ef4444",
-};
-
-/** Build a dimensional 3D-style marker element for the given point. */
-export function makeMarkerEl(m: MapMarker): HTMLElement {
-  const el = document.createElement("div");
-  const isTruck = m.kind === "truck";
-  const dimmed = isTruck && (m.state === "offline" || m.state === "nosignal");
-  el.style.cssText =
-    "position:relative;display:inline-block;line-height:0;cursor:pointer;" +
-    (dimmed
-      ? "filter:grayscale(1) drop-shadow(0 1px 1px rgba(0,0,0,0.25));opacity:0.62;"
-      : "filter:drop-shadow(0 1px 2px rgba(0,0,0,0.28));");
-
-  const art = document.createElement("div");
-  art.style.cssText = "line-height:0;";
-  art.innerHTML = MARKER_SVG[m.kind ?? "truck"];
-  el.appendChild(art);
-
-  if (m.badge) {
-    const b = document.createElement("div");
-    b.textContent = m.badge;
-    b.style.cssText =
-      "position:absolute;top:-7px;left:50%;transform:translateX(-50%);" +
-      "min-width:17px;height:17px;padding:0 3px;border-radius:9999px;" +
-      "background:#0e3a57;color:#fff;font:700 11px/17px system-ui,sans-serif;" +
-      "text-align:center;box-shadow:0 1px 2px rgba(0,0,0,0.35);";
-    el.appendChild(b);
+/** Icon (SVG + size + anchor) for a marker, for use as a classic Marker icon. */
+export function markerIcon(m: MapMarker): MarkerIcon {
+  if (m.kind === "origin") {
+    return { svg: pin("po", "#5ab7e8", "#2f7fb0", "#1f6f9e", ORIGIN_GLYPH, m.badge), w: 40, h: 52, ax: 20, ay: 49 };
   }
-
-  // Live status dot for the truck (moving = green, idle = amber, offline = red).
-  if (isTruck && m.state) {
-    const dot = document.createElement("div");
-    dot.style.cssText =
-      "position:absolute;top:-2px;right:-2px;width:11px;height:11px;" +
-      `border-radius:9999px;background:${DOT_COLOR[m.state]};` +
-      "border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.35);";
-    el.appendChild(dot);
+  if (m.kind === "dest") {
+    return { svg: pin("pd", "#f2704a", "#d6431f", "#c33f22", DEST_GLYPH, m.badge), w: 40, h: 52, ax: 20, ay: 49 };
   }
+  const [from, to] = VEHICLE_GRAD[m.state ?? "default"] ?? VEHICLE_GRAD.default;
+  return { svg: vehicleDisc("vd", from, to), w: 38, h: 42, ax: 19, ay: 18 };
+}
 
-  if (m.label) el.title = m.label;
-  return el;
+/** SVG string → data URI usable as a Marker icon url. */
+export function svgToDataUri(svg: string): string {
+  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+}
+
+/** A short key that changes only when the icon should change (kind/state/badge). */
+export function iconKey(m: MapMarker): string {
+  return `${m.kind ?? "truck"}|${m.state ?? ""}|${m.badge ?? ""}`;
 }
 
 // Guard against bad data: map libraries throw on out-of-range coordinates, which

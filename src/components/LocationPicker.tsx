@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps, GOOGLE_MAP_ID } from "@/lib/google";
 import { MapPin, Flag, Search } from "@/components/icons";
 import { parseCoords, looksLikeUrl } from "@/lib/location";
+import { markerIcon, svgToDataUri } from "@/components/mapMarkers";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -17,13 +18,6 @@ interface GeoResult {
   place_name: string;
   lat: number;
   lng: number;
-}
-
-/** A draggable colored dot used as the pin content. */
-function dotEl(color: string): HTMLElement {
-  const el = document.createElement("div");
-  el.style.cssText = `width:18px;height:18px;border-radius:50%;border:3px solid #fff;background:${color};box-shadow:0 0 0 4px ${color}33;cursor:grab;`;
-  return el;
 }
 
 function detach(obj: any) {
@@ -131,34 +125,26 @@ export default function LocationPicker({
       }
       const pos = { lat: p.lat, lng: p.lng };
       if (existing) {
-        if (typeof existing.setPosition === "function") existing.setPosition(pos);
-        else existing.position = pos;
+        existing.setPosition(pos);
         return;
       }
-      const Advanced = g.marker?.AdvancedMarkerElement;
-      let m: any;
-      if (Advanced && GOOGLE_MAP_ID) {
-        m = new Advanced({
-          map,
-          position: pos,
-          content: dotEl(COLOR[which]),
-          gmpDraggable: true,
-        });
-        m.addListener("dragend", () => {
-          const q = m.position;
-          if (!q) return;
-          const lat = typeof q.lat === "function" ? q.lat() : q.lat;
-          const lng = typeof q.lng === "function" ? q.lng() : q.lng;
-          onPickRef.current(which, { lat, lng });
-        });
-      } else {
-        m = new g.Marker({ map, position: pos, draggable: true });
-        m.addListener("dragend", (e: any) => {
-          if (!e.latLng) return;
-          onPickRef.current(which, { lat: e.latLng.lat(), lng: e.latLng.lng() });
-        });
-      }
-      markersRef.current[which] = m;
+      // Classic, draggable Marker with the shared pin icon (renders on any map).
+      const spec = markerIcon({ id: which, lat: p.lat, lng: p.lng, kind: which });
+      const mk = new g.Marker({
+        map,
+        position: pos,
+        draggable: true,
+        icon: {
+          url: svgToDataUri(spec.svg),
+          scaledSize: new g.Size(spec.w, spec.h),
+          anchor: new g.Point(spec.ax, spec.ay),
+        },
+      });
+      mk.addListener("dragend", (e: any) => {
+        if (!e.latLng) return;
+        onPickRef.current(which, { lat: e.latLng.lat(), lng: e.latLng.lng() });
+      });
+      markersRef.current[which] = mk;
     });
 
     // keep pins in view
