@@ -171,6 +171,50 @@ export default function LocationPicker({
     }
   }
 
+  // Search named places (Places API "New" → Place.searchByText) first, so
+  // hospitals / buildings / businesses resolve, then fall back to geocoding
+  // (addresses only) if Places is unavailable or returns nothing.
+  async function searchPlaces(q: string): Promise<GeoResult[]> {
+    const g = gRef.current;
+    try {
+      const Place = g?.places?.Place;
+      if (Place?.searchByText) {
+        const { places } = await Place.searchByText({
+          textQuery: q,
+          fields: ["displayName", "formattedAddress", "location"],
+          maxResultCount: 5,
+        });
+        if (places?.length) {
+          return places
+            .filter((p: any) => p.location)
+            .map((p: any, i: number) => ({
+              id: p.id ?? String(i),
+              place_name:
+                [p.displayName, p.formattedAddress].filter(Boolean).join(" · ") ||
+                "Place",
+              lat: p.location.lat(),
+              lng: p.location.lng(),
+            }));
+        }
+      }
+    } catch {
+      /* Places API not enabled / unavailable → geocoder fallback */
+    }
+    const geocoder = geocoderRef.current;
+    if (!geocoder) return [];
+    try {
+      const { results } = await geocoder.geocode({ address: q });
+      return (results ?? []).slice(0, 5).map((r: any, i: number) => ({
+        id: r.place_id ?? String(i),
+        place_name: r.formatted_address,
+        lat: r.geometry.location.lat(),
+        lng: r.geometry.location.lng(),
+      }));
+    } catch {
+      return [];
+    }
+  }
+
   async function runSearch() {
     const q = query.trim();
     if (!q) return;
@@ -204,19 +248,12 @@ export default function LocationPicker({
         }
         return;
       }
-      // Otherwise treat it as an address (Google Geocoding).
-      const geocoder = geocoderRef.current;
-      if (!geocoder) return;
-      const { results: res } = await geocoder.geocode({ address: q });
-      const list: GeoResult[] = (res ?? []).slice(0, 5).map((r: any, i: number) => ({
-        id: r.place_id ?? String(i),
-        place_name: r.formatted_address,
-        lat: r.geometry.location.lat(),
-        lng: r.geometry.location.lng(),
-      }));
+      // A place / address query: search named places (hospitals, buildings,
+      // businesses) via the Places API, falling back to plain geocoding.
+      const list = await searchPlaces(q);
       setResults(list);
       if (list.length === 0) {
-        setNote("No match found — try another address, a Maps link, or drop a pin.");
+        setNote("No match found — try a Maps link, coordinates, or drop a pin.");
       }
     } catch {
       setResults([]);
@@ -266,7 +303,7 @@ export default function LocationPicker({
                 runSearch();
               }
             }}
-            placeholder={`Address, Maps link or lat,lng for ${activeLabel}…`}
+            placeholder={`Search place, address, Maps link or lat,lng…`}
             className="ct-input"
           />
           <button

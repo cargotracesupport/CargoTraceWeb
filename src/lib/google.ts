@@ -40,7 +40,7 @@ export function loadGoogleMaps(): Promise<unknown> {
     s.src =
       "https://maps.googleapis.com/maps/api/js?" +
       `key=${encodeURIComponent(GOOGLE_MAPS_KEY)}` +
-      "&libraries=marker&v=weekly&loading=async" +
+      "&libraries=marker,places&v=weekly&loading=async" +
       `&callback=${cbName}`;
     s.async = true;
     s.onerror = () => reject(new Error("google maps failed to load"));
