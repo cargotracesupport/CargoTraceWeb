@@ -119,7 +119,7 @@ export default function NotificationBell({ userId }: { userId: string }) {
             aria-hidden
           />
           <div
-            className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-border2 bg-s1 shadow-xl"
+            className="fixed inset-x-3 top-16 z-50 overflow-hidden rounded-xl border border-border2 bg-s1 shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-80"
             style={{ boxShadow: "var(--ct-shadow-pop)" }}
           >
             <div className="border-b border-border px-4 py-2.5 text-sm font-semibold">
