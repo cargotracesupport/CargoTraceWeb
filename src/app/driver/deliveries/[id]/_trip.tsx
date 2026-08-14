@@ -46,6 +46,8 @@ export default function DriverTrip({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const watchRef = useRef<number | null>(null);
+  const [nearPickup, setNearPickup] = useState(false);
+  const [confirmingPickup, setConfirmingPickup] = useState(false);
 
   // Has the driver collected the goods? The server stamp (GPS ingest) wins —
   // it survives device changes; localStorage covers the moments before it lands.
@@ -121,16 +123,16 @@ export default function DriverTrip({
           speed: p.coords.speed != null ? p.coords.speed * 3.6 : null,
           heading: p.coords.heading,
         });
-        // Arriving at the pickup flips routing from "via pickup" to "to drop-off".
+        // Track proximity to the pickup — this only ENABLES the "Confirm pickup"
+        // button. The driver confirms collection explicitly (no auto-mark).
         const o = originRef.current;
-        if (
-          o &&
-          haversineKm(
-            { lat: p.coords.latitude, lng: p.coords.longitude },
-            { lat: o.lat, lng: o.lng },
-          ) <= PICKUP_REACHED_KM
-        )
-          markPickupReached();
+        setNearPickup(
+          o != null &&
+            haversineKm(
+              { lat: p.coords.latitude, lng: p.coords.longitude },
+              { lat: o.lat, lng: o.lng },
+            ) <= PICKUP_REACHED_KM,
+        );
         void sendPing(p);
       },
       (err) => {
@@ -146,7 +148,7 @@ export default function DriverTrip({
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
     );
-  }, [sendPing, markPickupReached]);
+  }, [sendPing]);
 
   // GPS is tied to the trip being live: it activates the moment the trip starts
   // and auto-resumes if the driver reopens this screen while en route. No manual
@@ -172,6 +174,23 @@ export default function DriverTrip({
       return;
     }
     setStatus("en_route"); // flips the effect above on → GPS starts
+    router.refresh();
+  }
+
+  async function confirmPickup() {
+    setConfirmingPickup(true);
+    setError(null);
+    const supabase = createClient();
+    const { error: err } = await supabase
+      .from("deliveries")
+      .update({ picked_up_at: new Date().toISOString() })
+      .eq("id", deliveryId);
+    setConfirmingPickup(false);
+    if (err) {
+      setError("Could not confirm pickup. Please try again.");
+      return;
+    }
+    markPickupReached(); // flips the customer/agent view to "on the way to you"
     router.refresh();
   }
 
@@ -269,19 +288,17 @@ export default function DriverTrip({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [etaSig]);
 
-  // Same route in Google Maps: en route → navigate from the current location
-  // (via the pickup until it's been visited); otherwise preview pickup → drop-off.
-  const navUrl = dest
+  // Turn-by-turn in the Google Maps app: to the pickup until it's confirmed, then
+  // to the drop-off. Opening the Maps app backgrounds this tab, which pauses live
+  // GPS sharing until the driver returns — so the in-app map is the primary guide.
+  const navTarget = !pickupReached && origin ? origin : dest;
+  const navLabel =
+    !pickupReached && origin ? "Navigate to pickup" : "Navigate to drop-off";
+  const navUrl = navTarget
     ? `https://www.google.com/maps/dir/?${new URLSearchParams({
         api: "1",
         travelmode: "driving",
-        destination: `${dest.lat},${dest.lng}`,
-        ...(viaPickup && origin
-          ? { waypoints: `${origin.lat},${origin.lng}` }
-          : {}),
-        ...(status !== "en_route" && origin
-          ? { origin: `${origin.lat},${origin.lng}` }
-          : {}),
+        destination: `${navTarget.lat},${navTarget.lng}`,
       }).toString()}`
     : null;
 
@@ -337,9 +354,9 @@ export default function DriverTrip({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="ct-btn-ghost ml-auto shrink-0 px-2.5 py-1 text-xs"
-                title="Opens Google Maps for turn-by-turn navigation. Keep this tab open — your live location keeps sharing with the customer and dispatcher."
+                title="Opens the Google Maps app for turn-by-turn. Live location sharing pauses while you're in Maps and resumes when you come back here."
               >
-                <Navigation className="h-3.5 w-3.5" /> Google Maps
+                <Navigation className="h-3.5 w-3.5" /> {navLabel}
               </a>
             ) : null}
           </div>
@@ -396,14 +413,33 @@ export default function DriverTrip({
 
         {status === "en_route" ? (
           <>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => setConfirmAction("deliver")}
-              className="ct-btn-primary w-full py-3 text-base disabled:opacity-60"
-            >
-              <Check className="h-4 w-4" /> Mark delivered
-            </button>
+            {!pickupReached ? (
+              <>
+                <button
+                  type="button"
+                  disabled={confirmingPickup || !nearPickup}
+                  onClick={confirmPickup}
+                  className="ct-btn-primary w-full py-3 text-base disabled:opacity-60"
+                >
+                  <Check className="h-4 w-4" />
+                  {confirmingPickup ? "Confirming…" : "Confirm pickup"}
+                </button>
+                <p className="text-center text-xs text-muted">
+                  {nearPickup
+                    ? "You're at the pickup — confirm once you've collected the goods."
+                    : "Enabled once you're within ~300 m of the pickup."}
+                </p>
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setConfirmAction("deliver")}
+                className="ct-btn-primary w-full py-3 text-base disabled:opacity-60"
+              >
+                <Check className="h-4 w-4" /> Mark delivered
+              </button>
+            )}
             {gps === "denied" || gps === "error" ? (
               <button
                 type="button"
