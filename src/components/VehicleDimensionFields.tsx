@@ -20,7 +20,7 @@ export default function VehicleDimensionFields({
   return (
     <div>
       <label className="ct-label">Dimensions &amp; capacity (optional)</label>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <Field
           aria="Length in metres"
           placeholder="Length"
