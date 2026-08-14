@@ -75,6 +75,32 @@ export default function CustomerTracker({
   // form back. Ignore stale "no drop-off" polls briefly after a local save.
   const dropoffSavedAt = useRef(0);
 
+  // Customer-facing update feed (polled from the public notifications endpoint).
+  const [updates, setUpdates] = useState<
+    Array<{ id: string; title: string; body: string | null; created_at: string }>
+  >([]);
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      try {
+        const res = await fetch(`/api/deliveries/${token}/notifications`, {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const j = (await res.json()) as { notifications?: typeof updates };
+        if (active && j.notifications) setUpdates(j.notifications);
+      } catch {
+        /* transient — keep the last feed */
+      }
+    }
+    load();
+    const t = setInterval(load, 15000);
+    return () => {
+      active = false;
+      clearInterval(t);
+    };
+  }, [token]);
+
   // Immediately reflect a saved drop-off (before the next poll) so the setter
   // flips to the live view without a page reload.
   const applyDropoff = (lat: number, lng: number, label: string | null) => {
@@ -562,6 +588,31 @@ export default function CustomerTracker({
                 Waiting for the driver to start the trip…
               </p>
             )}
+          </section>
+        ) : null}
+
+        {/* Updates feed */}
+        {updates.length > 0 ? (
+          <section className="ct-card p-5">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted2">
+              Updates
+            </div>
+            <ul className="mt-3 flex flex-col gap-3">
+              {updates.slice(0, 6).map((u) => (
+                <li key={u.id} className="flex gap-3">
+                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-text">{u.title}</p>
+                    {u.body ? (
+                      <p className="text-xs text-muted2">{u.body}</p>
+                    ) : null}
+                    <p className="mt-0.5 text-[11px] text-muted">
+                      {fmtTime(u.created_at)}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </section>
         ) : null}
 

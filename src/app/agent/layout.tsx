@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { BrandMark, Wordmark, LiveDot } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
+import NotificationBell from "@/components/NotificationBell";
 import AgentNav from "./_nav";
 import NewOrderAlert from "./_alert";
 
@@ -43,6 +44,7 @@ export default async function AgentLayout({
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
+            <NotificationBell userId={session.profile.id} />
             <span className="ct-pill bg-primary/10 text-primary">
               <LiveDot /> LIVE
             </span>

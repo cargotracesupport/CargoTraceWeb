@@ -99,6 +99,18 @@ export interface Position {
   created_at: string;
 }
 
+export interface Notification {
+  id: string;
+  org_id: string;
+  recipient_role: Role | "customer" | null;
+  recipient_id: string | null;
+  delivery_id: string | null;
+  type: string;
+  title: string;
+  body: string | null;
+  created_at: string;
+}
+
 export const STATUS_LABEL: Record<DeliveryStatus, string> = {
   awaiting_dropoff: "Awaiting drop-off",
   pending: "Pending",

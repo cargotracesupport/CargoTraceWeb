@@ -48,6 +48,7 @@ export default function DriverTrip({
   const watchRef = useRef<number | null>(null);
   const [nearPickup, setNearPickup] = useState(false);
   const [confirmingPickup, setConfirmingPickup] = useState(false);
+  const deniedReportedRef = useRef(false);
 
   // Has the driver collected the goods? The server stamp (GPS ingest) wins —
   // it survives device changes; localStorage covers the moments before it lands.
@@ -105,6 +106,19 @@ export default function DriverTrip({
     [deliveryId],
   );
 
+  // Alert the dispatcher/admin (once) that this driver has location turned off.
+  const reportLocationDenied = useCallback(() => {
+    if (deniedReportedRef.current) return;
+    deniedReportedRef.current = true;
+    fetch("/api/notify/location-denied", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deliveryId }),
+    }).catch(() => {
+      deniedReportedRef.current = false; // let a later denial retry
+    });
+  }, [deliveryId]);
+
   const startGps = useCallback(() => {
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
       setGps("error");
@@ -117,6 +131,7 @@ export default function DriverTrip({
     watchRef.current = navigator.geolocation.watchPosition(
       (p) => {
         setGps("on");
+        deniedReportedRef.current = false; // location back → allow a future alert
         setPos({
           lat: p.coords.latitude,
           lng: p.coords.longitude,
@@ -138,9 +153,8 @@ export default function DriverTrip({
       (err) => {
         if (err.code === err.PERMISSION_DENIED) {
           setGps("denied");
-          setGpsMsg(
-            "Location permission denied. Enable it in your browser settings to share your trip.",
-          );
+          setGpsMsg(null);
+          reportLocationDenied();
         } else {
           setGps("error");
           setGpsMsg(err.message || "Could not get your location.");
@@ -148,7 +162,7 @@ export default function DriverTrip({
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
     );
-  }, [sendPing]);
+  }, [sendPing, reportLocationDenied]);
 
   // GPS is tied to the trip being live: it activates the moment the trip starts
   // and auto-resumes if the driver reopens this screen while en route. No manual
@@ -441,15 +455,24 @@ export default function DriverTrip({
               </button>
             )}
             {gps === "denied" || gps === "error" ? (
-              <button
-                type="button"
-                onClick={startGps}
-                className="ct-btn-ghost w-full justify-center"
-              >
-                <Locate className="h-4 w-4" /> Enable location
-              </button>
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-red/40 bg-red/10 px-3 py-3 text-center">
+                <p className="text-sm font-semibold text-red">
+                  Location is off
+                </p>
+                <p className="text-xs text-muted2">
+                  Turn it on so the customer and dispatcher can see your trip.
+                  They&rsquo;ve been notified it&rsquo;s off.
+                </p>
+                <button
+                  type="button"
+                  onClick={startGps}
+                  className="ct-btn-primary w-full justify-center"
+                >
+                  <Locate className="h-4 w-4" /> Turn on location
+                </button>
+              </div>
             ) : null}
-            {gpsMsg ? (
+            {gpsMsg && gps === "error" ? (
               <p className="text-center text-xs text-red">{gpsMsg}</p>
             ) : null}
           </>

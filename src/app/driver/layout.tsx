@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { BrandMark, Wordmark, LiveDot } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
+import NotificationBell from "@/components/NotificationBell";
 import VehicleGate from "./_gate";
 
 export default async function DriverLayout({
@@ -40,6 +41,7 @@ export default async function DriverLayout({
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
+            <NotificationBell userId={session.profile.id} />
             <span className="ct-pill bg-primary/10 text-primary">
               <LiveDot /> TX
             </span>

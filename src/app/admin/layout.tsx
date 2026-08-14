@@ -3,6 +3,7 @@ import AdminNav from "./_nav";
 import { BrandMark, Wordmark, LiveDot, Avatar } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
+import NotificationBell from "@/components/NotificationBell";
 
 export default async function AdminLayout({
   children,
@@ -27,6 +28,7 @@ export default async function AdminLayout({
 
           <div className="flex items-center gap-3">
             <ThemeToggle />
+            <NotificationBell userId={session.profile.id} />
             <span className="hidden max-w-[40vw] truncate text-sm text-muted2 sm:inline">
               {session.profile.full_name}
             </span>
