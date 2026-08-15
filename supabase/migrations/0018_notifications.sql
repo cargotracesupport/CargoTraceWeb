@@ -40,6 +40,10 @@ create policy notifications_select on public.notifications
   );
 
 alter publication supabase_realtime add table public.notifications;
+-- Ship the full row in WAL so realtime RLS can evaluate the recipient columns
+-- (same reason as 0009 for the other tenant tables) — without this the live
+-- bell silently receives nothing.
+alter table public.notifications replica identity full;
 
 -- ── Helpers ──────────────────────────────────────────────
 -- Notify the admins + the owning agent about a delivery.
