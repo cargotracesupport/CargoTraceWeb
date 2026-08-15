@@ -71,6 +71,16 @@ export const UserCog = (p: IconProps) => (
   </Svg>
 );
 
+export const Contact = (p: IconProps) => (
+  <Svg {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="9" cy="10.5" r="2.4" />
+    <path d="M5.5 16.5a3.6 3.6 0 0 1 7 0" />
+    <line x1="15.5" y1="9.5" x2="18" y2="9.5" />
+    <line x1="15.5" y1="13" x2="18" y2="13" />
+  </Svg>
+);
+
 export const MapPin = (p: IconProps) => (
   <Svg {...p}>
     <path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10Z" />

@@ -10,9 +10,11 @@ import type {
   Device,
   Delivery,
   DeliveryStatus,
+  Customer,
 } from "@/lib/types";
 import { STATUS_LABEL } from "@/lib/types";
 import LocationPicker, { type LatLng } from "@/components/LocationPicker";
+import CustomerPicker from "@/components/CustomerPicker";
 import Spinner from "@/components/Spinner";
 import { whatsappUrl } from "@/lib/share";
 
@@ -84,6 +86,8 @@ export default function NewDeliveryForm({
   ownerAgentId,
   backHref = "/admin/deliveries",
   activeAssignments,
+  customers,
+  currentUserId,
 }: {
   orgId: string;
   drivers: Profile[];
@@ -98,6 +102,10 @@ export default function NewDeliveryForm({
   backHref?: string;
   // Rows used to mark drivers as busy in the picker.
   activeAssignments?: ActiveAssignment[];
+  // Customer master (RLS-scoped) for the "saved customer" picker.
+  customers?: Customer[];
+  // Current user id — used as created_by when adding a customer inline.
+  currentUserId?: string;
 }) {
   const router = useRouter();
   const editing = !!delivery;
@@ -119,6 +127,7 @@ export default function NewDeliveryForm({
   const [destLabel, setDestLabel] = useState(delivery?.dest_label ?? "");
   const [destLat, setDestLat] = useState(delivery?.dest_lat?.toString() ?? "");
   const [destLng, setDestLng] = useState(delivery?.dest_lng?.toString() ?? "");
+  const [customerId, setCustomerId] = useState(delivery?.customer_id ?? "");
   const [customerName, setCustomerName] = useState(
     delivery?.customer_name ?? "",
   );
@@ -128,6 +137,18 @@ export default function NewDeliveryForm({
   const [customerEmail, setCustomerEmail] = useState(
     delivery?.customer_email ?? "",
   );
+
+  // Picked a saved customer → fill their details; blank → one-off (unlinked).
+  function applyCustomer(c: Customer | null) {
+    if (c) {
+      setCustomerId(c.id);
+      setCustomerName(c.name ?? "");
+      setCustomerPhone(c.phone ?? "");
+      setCustomerEmail(c.email ?? "");
+    } else {
+      setCustomerId("");
+    }
+  }
   const [driverId, setDriverId] = useState(delivery?.driver_id ?? "");
   const [vehicleId, setVehicleId] = useState(delivery?.vehicle_id ?? "");
   const [deviceId, setDeviceId] = useState(delivery?.device_id ?? "");
@@ -233,6 +254,7 @@ export default function NewDeliveryForm({
       dest_label: destLabel.trim() || null,
       dest_lat: dLat,
       dest_lng: dLng,
+      customer_id: customerId || null,
       customer_name: customerName.trim() || null,
       customer_phone: customerPhone.trim() || null,
       customer_email: customerEmail.trim() || null,
@@ -626,6 +648,15 @@ export default function NewDeliveryForm({
       {/* Customer */}
       <fieldset className="ct-card flex flex-col gap-4 p-5">
         <legend className="px-1 text-sm font-semibold">Customer (receiver)</legend>
+        {customers && currentUserId ? (
+          <CustomerPicker
+            customers={customers}
+            value={customerId}
+            onPick={applyCustomer}
+            orgId={orgId}
+            currentUserId={currentUserId}
+          />
+        ) : null}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div>
             <label className="ct-label" htmlFor="customer_name">

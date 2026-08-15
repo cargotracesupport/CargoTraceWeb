@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile, Vehicle, Device, Delivery } from "@/lib/types";
+import type { Profile, Vehicle, Device, Delivery, Customer } from "@/lib/types";
 import NewDeliveryForm from "../../../../admin/deliveries/new/_form";
 
 export default async function AgentEditDeliveryPage({
@@ -15,7 +15,7 @@ export default async function AgentEditDeliveryPage({
 
   // RLS scopes deliveries/drivers/vehicles to this agent's own. If the delivery
   // isn't theirs, maybeSingle() returns null -> notFound.
-  const [deliveryRes, driversRes, vehiclesRes, devicesRes, activeRes] =
+  const [deliveryRes, driversRes, vehiclesRes, devicesRes, activeRes, customersRes] =
     await Promise.all([
       supabase.from("deliveries").select("*").eq("id", params.id).maybeSingle(),
       supabase
@@ -29,6 +29,7 @@ export default async function AgentEditDeliveryPage({
         .from("deliveries")
         .select("id, driver_id, status, reference")
         .in("status", ["assigned", "en_route"]),
+      supabase.from("customers").select("*").order("name", { ascending: true }),
     ]);
 
   const delivery = deliveryRes.data as Delivery | null;
@@ -37,6 +38,7 @@ export default async function AgentEditDeliveryPage({
   const drivers = (driversRes.data ?? []) as Profile[];
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
   const devices = (devicesRes.data ?? []) as Device[];
+  const customers = (customersRes.data ?? []) as Customer[];
   const activeAssignments = (activeRes.data ?? []) as {
     id: string;
     driver_id: string | null;
@@ -68,6 +70,8 @@ export default async function AgentEditDeliveryPage({
         ownerAgentId={session.profile.id}
         backHref="/agent"
         activeAssignments={activeAssignments}
+        customers={customers}
+        currentUserId={session.profile.id}
       />
     </div>
   );

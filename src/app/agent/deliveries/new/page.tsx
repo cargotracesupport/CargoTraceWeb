@@ -1,31 +1,34 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile, Vehicle, Device } from "@/lib/types";
+import type { Profile, Vehicle, Device, Customer } from "@/lib/types";
 import NewDeliveryForm from "../../../admin/deliveries/new/_form";
 
 export default async function AgentNewDeliveryPage() {
   const session = await requireRole("agent");
   const supabase = createClient();
 
-  // RLS scopes drivers to this agent's own; vehicles/devices are org-shared.
-  const [driversRes, vehiclesRes, devicesRes, activeRes] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("*")
-      .eq("role", "driver")
-      .order("full_name", { ascending: true }),
-    supabase.from("vehicles").select("*").order("name", { ascending: true }),
-    supabase.from("devices").select("*").order("label", { ascending: true }),
-    supabase
-      .from("deliveries")
-      .select("id, driver_id, status, reference")
-      .in("status", ["assigned", "en_route"]),
-  ]);
+  // RLS scopes drivers + customers to this agent's own; vehicles/devices are org-shared.
+  const [driversRes, vehiclesRes, devicesRes, activeRes, customersRes] =
+    await Promise.all([
+      supabase
+        .from("profiles")
+        .select("*")
+        .eq("role", "driver")
+        .order("full_name", { ascending: true }),
+      supabase.from("vehicles").select("*").order("name", { ascending: true }),
+      supabase.from("devices").select("*").order("label", { ascending: true }),
+      supabase
+        .from("deliveries")
+        .select("id, driver_id, status, reference")
+        .in("status", ["assigned", "en_route"]),
+      supabase.from("customers").select("*").order("name", { ascending: true }),
+    ]);
 
   const drivers = (driversRes.data ?? []) as Profile[];
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
   const devices = (devicesRes.data ?? []) as Device[];
+  const customers = (customersRes.data ?? []) as Customer[];
   const activeAssignments = (activeRes.data ?? []) as {
     id: string;
     driver_id: string | null;
@@ -55,6 +58,8 @@ export default async function AgentNewDeliveryPage() {
         ownerAgentId={session.profile.id}
         backHref="/agent"
         activeAssignments={activeAssignments}
+        customers={customers}
+        currentUserId={session.profile.id}
       />
     </div>
   );

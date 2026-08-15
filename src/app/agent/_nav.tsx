@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dashboard, Package, Users, Locate } from "@/components/icons";
+import { Dashboard, Package, Users, Locate, Contact } from "@/components/icons";
 
 const LINKS = [
   { href: "/agent", label: "Dispatch", exact: true, Icon: Dashboard },
   { href: "/agent/map", label: "Map", exact: false, Icon: Locate },
   { href: "/agent/unassigned", label: "Unassigned", exact: false, Icon: Package },
   { href: "/agent/drivers", label: "Drivers", exact: false, Icon: Users },
+  { href: "/agent/customers", label: "Customers", exact: false, Icon: Contact },
 ];
 
 type Tone = "amber" | "primary";

@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile, Vehicle, Device } from "@/lib/types";
+import type { Profile, Vehicle, Device, Customer } from "@/lib/types";
 import NewDeliveryForm from "./_form";
 
 export default async function NewDeliveryPage() {
   const session = await requireRole("admin");
   const supabase = createClient();
 
-  const [driversRes, vehiclesRes, devicesRes, agentsRes, activeRes] =
+  const [driversRes, vehiclesRes, devicesRes, agentsRes, activeRes, customersRes] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -26,12 +26,14 @@ export default async function NewDeliveryPage() {
         .from("deliveries")
         .select("id, driver_id, status, reference")
         .in("status", ["assigned", "en_route"]),
+      supabase.from("customers").select("*").order("name", { ascending: true }),
     ]);
 
   const drivers = (driversRes.data ?? []) as Profile[];
   const vehicles = (vehiclesRes.data ?? []) as Vehicle[];
   const devices = (devicesRes.data ?? []) as Device[];
   const agents = (agentsRes.data ?? []) as { id: string; full_name: string | null }[];
+  const customers = (customersRes.data ?? []) as Customer[];
   const activeAssignments = (activeRes.data ?? []) as {
     id: string;
     driver_id: string | null;
@@ -60,6 +62,8 @@ export default async function NewDeliveryPage() {
         devices={devices}
         agents={agents}
         activeAssignments={activeAssignments}
+        customers={customers}
+        currentUserId={session.profile.id}
       />
     </div>
   );

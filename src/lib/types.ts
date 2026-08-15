@@ -70,6 +70,7 @@ export interface Delivery {
   dest_label: string | null;
   dest_lat: number | null;
   dest_lng: number | null;
+  customer_id: string | null;
   customer_name: string | null;
   customer_phone: string | null;
   customer_email: string | null;
@@ -83,6 +84,16 @@ export interface Delivery {
   started_at: string | null;
   picked_up_at: string | null;
   delivered_at: string | null;
+}
+
+export interface Customer {
+  id: string;
+  org_id: string;
+  created_by: string | null;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  created_at: string;
 }
 
 export interface Position {

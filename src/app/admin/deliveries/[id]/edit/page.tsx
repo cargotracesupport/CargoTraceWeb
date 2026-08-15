@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile, Vehicle, Device, Delivery } from "@/lib/types";
+import type { Profile, Vehicle, Device, Delivery, Customer } from "@/lib/types";
 import NewDeliveryForm from "../../new/_form";
 
 export default async function EditDeliveryPage({
@@ -13,26 +13,34 @@ export default async function EditDeliveryPage({
   const session = await requireRole("admin");
   const supabase = createClient();
 
-  const [deliveryRes, driversRes, vehiclesRes, devicesRes, agentsRes, activeRes] =
-    await Promise.all([
-      supabase.from("deliveries").select("*").eq("id", params.id).maybeSingle(),
-      supabase
-        .from("profiles")
-        .select("*")
-        .eq("role", "driver")
-        .order("full_name", { ascending: true }),
-      supabase.from("vehicles").select("*").order("name", { ascending: true }),
-      supabase.from("devices").select("*").order("label", { ascending: true }),
-      supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("role", "agent")
-        .order("full_name", { ascending: true }),
-      supabase
-        .from("deliveries")
-        .select("id, driver_id, status, reference")
-        .in("status", ["assigned", "en_route"]),
-    ]);
+  const [
+    deliveryRes,
+    driversRes,
+    vehiclesRes,
+    devicesRes,
+    agentsRes,
+    activeRes,
+    customersRes,
+  ] = await Promise.all([
+    supabase.from("deliveries").select("*").eq("id", params.id).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("*")
+      .eq("role", "driver")
+      .order("full_name", { ascending: true }),
+    supabase.from("vehicles").select("*").order("name", { ascending: true }),
+    supabase.from("devices").select("*").order("label", { ascending: true }),
+    supabase
+      .from("profiles")
+      .select("id, full_name")
+      .eq("role", "agent")
+      .order("full_name", { ascending: true }),
+    supabase
+      .from("deliveries")
+      .select("id, driver_id, status, reference")
+      .in("status", ["assigned", "en_route"]),
+    supabase.from("customers").select("*").order("name", { ascending: true }),
+  ]);
 
   const delivery = deliveryRes.data as Delivery | null;
   if (!delivery) notFound();
@@ -44,6 +52,7 @@ export default async function EditDeliveryPage({
     id: string;
     full_name: string | null;
   }[];
+  const customers = (customersRes.data ?? []) as Customer[];
   const activeAssignments = (activeRes.data ?? []) as {
     id: string;
     driver_id: string | null;
@@ -76,6 +85,8 @@ export default async function EditDeliveryPage({
         delivery={delivery}
         agents={agents}
         activeAssignments={activeAssignments}
+        customers={customers}
+        currentUserId={session.profile.id}
       />
     </div>
   );
