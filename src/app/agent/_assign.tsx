@@ -576,9 +576,13 @@ function WaitingForDropoff({ deliveries }: { deliveries: Delivery[] }) {
         >
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-medium text-primary">
+              <Link
+                href={`/agent/deliveries/${d.id}`}
+                className="font-mono text-sm font-medium text-primary hover:underline"
+                title="View full details"
+              >
                 {d.reference ?? "—"}
-              </span>
+              </Link>
               <DeliveryStatusBadge status={d.status} />
               <EditLink id={d.id} status={d.status} />
             </div>
@@ -668,9 +672,13 @@ function DeliveryRow({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-sm font-medium text-primary">
+            <Link
+              href={`/agent/deliveries/${delivery.id}`}
+              className="font-mono text-sm font-medium text-primary hover:underline"
+              title="View full details"
+            >
               {delivery.reference ?? "—"}
-            </span>
+            </Link>
             <DeliveryStatusBadge status={delivery.status} />
             <EditLink id={delivery.id} status={delivery.status} />
           </div>

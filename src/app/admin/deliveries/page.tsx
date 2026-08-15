@@ -6,7 +6,7 @@ import SimulateButton from "@/components/SimulateButton";
 import DeleteButton from "@/components/DeleteButton";
 import WhatsAppLink from "@/components/WhatsAppLink";
 import { trackShareMessage } from "@/lib/share";
-import { Plus, Pencil, Locate } from "@/components/icons";
+import { Plus, Pencil, Locate, Eye } from "@/components/icons";
 
 const APP_BASE = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
 
@@ -69,14 +69,25 @@ function RowActions({ d }: { d: DeliveryRow }) {
           })}
         />
       ) : null}
-      <Link
-        href={`/admin/deliveries/${d.id}/edit`}
-        title="Edit delivery"
-        className="ct-btn-ghost px-2 py-1 text-xs"
-      >
-        <Pencil className="h-3.5 w-3.5" />
-        Edit
-      </Link>
+      {done ? (
+        <Link
+          href={`/admin/deliveries/${d.id}`}
+          title="View full details"
+          className="ct-btn-ghost px-2 py-1 text-xs"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          View
+        </Link>
+      ) : (
+        <Link
+          href={`/admin/deliveries/${d.id}/edit`}
+          title="Edit delivery"
+          className="ct-btn-ghost px-2 py-1 text-xs"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+          Edit
+        </Link>
+      )}
       <Link
         href={`/track/${d.tracking_token}`}
         target="_blank"
@@ -150,9 +161,12 @@ export default async function AdminDeliveriesPage() {
                   {deliveries.map((d) => (
                     <tr key={d.id} className="transition-colors hover:bg-s2/60">
                       <td className="px-3 py-3 align-top">
-                        <p className="font-mono font-medium">
+                        <Link
+                          href={`/admin/deliveries/${d.id}`}
+                          className="font-mono font-medium text-text hover:text-primary hover:underline"
+                        >
                           {d.reference ?? "—"}
-                        </p>
+                        </Link>
                         <p className="max-w-[200px] truncate text-xs text-muted2">
                           {d.goods}
                         </p>
@@ -203,9 +217,12 @@ export default async function AdminDeliveriesPage() {
               <div key={d.id} className="ct-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-mono text-sm font-medium">
+                    <Link
+                      href={`/admin/deliveries/${d.id}`}
+                      className="font-mono text-sm font-medium text-text hover:text-primary hover:underline"
+                    >
                       {d.reference ?? "—"}
-                    </p>
+                    </Link>
                     <p className="truncate text-xs text-muted2">{d.goods}</p>
                     {d.agent?.full_name ? (
                       <p className="truncate text-[11px] text-muted">

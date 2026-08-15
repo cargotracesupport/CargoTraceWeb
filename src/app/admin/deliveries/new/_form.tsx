@@ -242,6 +242,19 @@ export default function NewDeliveryForm({
       }
     }
 
+    // A driver can only be assigned once the delivery has a drop-off (the
+    // customer normally sets it). Also block moving the status forward without
+    // one, so a delivery can't be "assigned/en route/delivered" with no drop-off.
+    const hasDropoffCoords = dLat != null && dLng != null;
+    const movingForward =
+      editing && ["assigned", "en_route", "delivered"].includes(status);
+    if ((driverId || movingForward) && !hasDropoffCoords) {
+      setError(
+        "Set the drop-off location first — a driver can only be assigned once the delivery has a drop-off.",
+      );
+      return;
+    }
+
     setBusy(true);
     const supabase = createClient();
 
@@ -452,6 +465,9 @@ export default function NewDeliveryForm({
       </div>
     );
   }
+
+  // A driver can only be assigned once a drop-off exists — gate the picker on it.
+  const hasDropoff = parsePoint(destLat, destLng) != null;
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -717,6 +733,12 @@ export default function NewDeliveryForm({
             <select
               id="driver"
               value={driverId}
+              disabled={!hasDropoff}
+              title={
+                hasDropoff
+                  ? "Assign a driver"
+                  : "Set the drop-off location first — a driver can only be assigned once the delivery has a drop-off."
+              }
               onChange={(e) => {
                 const v = e.target.value;
                 setDriverId(v);
@@ -724,7 +746,7 @@ export default function NewDeliveryForm({
                 const drv = drivers.find((d) => d.id === v);
                 setVehicleId(v ? (drv?.vehicle_id ?? "") : "");
               }}
-              className="ct-input"
+              className={`ct-input ${hasDropoff ? "" : "cursor-not-allowed opacity-60"}`}
             >
               <option value="">Unassigned</option>
               {drivers.map((d) => {
@@ -744,8 +766,9 @@ export default function NewDeliveryForm({
               })}
             </select>
             <p className="mt-1 text-xs text-muted">
-              Available drivers are free for a new trip; busy drivers are
-              currently assigned or on the road.
+              {hasDropoff
+                ? "Available drivers are free for a new trip; busy drivers are currently assigned or on the road."
+                : "Set the drop-off location above first — a driver can only be assigned once the delivery has a drop-off."}
             </p>
           </div>
           <div>

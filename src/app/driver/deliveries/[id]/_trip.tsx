@@ -13,6 +13,9 @@ import { formatEta, formatKm, haversineKm } from "@/lib/eta";
 // unlock. The driver still confirms collection explicitly — this only enables
 // the button (a generous radius so it's ready as they approach).
 const PICKUP_REACHED_KM = 2;
+// Same idea for the drop-off: "Mark delivered" only unlocks once the driver is
+// within this distance of the drop-off location.
+const DROPOFF_REACHED_KM = 2;
 
 type Place = { lat: number; lng: number; label: string | null };
 type Pos = { lat: number; lng: number; speed: number | null; heading: number | null };
@@ -48,6 +51,7 @@ export default function DriverTrip({
   const [error, setError] = useState<string | null>(null);
   const watchRef = useRef<number | null>(null);
   const [nearPickup, setNearPickup] = useState(false);
+  const [nearDropoff, setNearDropoff] = useState(false);
   const [confirmingPickup, setConfirmingPickup] = useState(false);
   const deniedReportedRef = useRef(false);
 
@@ -76,6 +80,8 @@ export default function DriverTrip({
   }, [deliveryId]);
   const originRef = useRef(origin);
   originRef.current = origin;
+  const destRef = useRef(dest);
+  destRef.current = dest;
 
   const stopGps = useCallback(() => {
     if (watchRef.current != null && typeof navigator !== "undefined") {
@@ -141,13 +147,17 @@ export default function DriverTrip({
         });
         // Track proximity to the pickup — this only ENABLES the "Confirm pickup"
         // button. The driver confirms collection explicitly (no auto-mark).
+        const here = { lat: p.coords.latitude, lng: p.coords.longitude };
         const o = originRef.current;
         setNearPickup(
-          o != null &&
-            haversineKm(
-              { lat: p.coords.latitude, lng: p.coords.longitude },
-              { lat: o.lat, lng: o.lng },
-            ) <= PICKUP_REACHED_KM,
+          o != null && haversineKm(here, { lat: o.lat, lng: o.lng }) <= PICKUP_REACHED_KM,
+        );
+        // Gate "Mark delivered" to within range of the drop-off. With no
+        // drop-off set we can't gate, so don't block the driver.
+        const dst = destRef.current;
+        setNearDropoff(
+          dst == null ||
+            haversineKm(here, { lat: dst.lat, lng: dst.lng }) <= DROPOFF_REACHED_KM,
         );
         void sendPing(p);
       },
@@ -446,14 +456,21 @@ export default function DriverTrip({
                 </p>
               </>
             ) : (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => setConfirmAction("deliver")}
-                className="ct-btn-primary w-full py-3 text-base disabled:opacity-60"
-              >
-                <Check className="h-4 w-4" /> Mark delivered
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={busy || !nearDropoff}
+                  onClick={() => setConfirmAction("deliver")}
+                  className="ct-btn-primary w-full py-3 text-base disabled:opacity-60"
+                >
+                  <Check className="h-4 w-4" /> Mark delivered
+                </button>
+                <p className="text-center text-xs text-muted">
+                  {nearDropoff
+                    ? "You're at the drop-off — mark it delivered once handed over."
+                    : "Enabled once you're within ~2 km of the drop-off."}
+                </p>
+              </>
             )}
             {gps === "denied" || gps === "error" ? (
               <div className="flex flex-col items-center gap-2 rounded-xl border border-red/40 bg-red/10 px-3 py-3 text-center">
