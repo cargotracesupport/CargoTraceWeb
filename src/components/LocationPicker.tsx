@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps, GOOGLE_MAP_ID } from "@/lib/google";
-import { MapPin, Flag, Search } from "@/components/icons";
+import { MapPin, Flag, Search, Locate } from "@/components/icons";
 import { parseCoords, looksLikeUrl } from "@/lib/location";
 import { markerIcon, svgToDataUri } from "@/components/mapMarkers";
 
@@ -61,6 +61,7 @@ export default function LocationPicker({
   const [results, setResults] = useState<GeoResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     activeRef.current = active;
@@ -267,6 +268,59 @@ export default function LocationPicker({
     placePoint(r.lat, r.lng, r.place_name);
   }
 
+  // Drop the active pin on the device's current location (reverse-geocoding a
+  // human label for it). Useful when the agent is standing at the pickup.
+  function useMyLocation() {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setNote("Location isn't available on this device — drop a pin on the map.");
+      return;
+    }
+    setLocating(true);
+    setNote(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        const lat = p.coords.latitude;
+        const lng = p.coords.longitude;
+        // Place the pin AND surface the address in the search bar (so the agent
+        // sees what was picked and can tweak it), then apply it on the map.
+        const done = (label: string | null) => {
+          setLocating(false);
+          onPickRef.current(activeRef.current, {
+            lat,
+            lng,
+            label: label ?? undefined,
+          });
+          setResults([]);
+          setNote(null);
+          setQuery(label ?? `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+          const map = mapRef.current;
+          if (map) {
+            map.panTo({ lat, lng });
+            map.setZoom(15);
+          }
+        };
+        const geocoder = geocoderRef.current;
+        if (geocoder?.geocode) {
+          geocoder
+            .geocode({ location: { lat, lng } })
+            .then((res: any) => done(res?.results?.[0]?.formatted_address ?? null))
+            .catch(() => done(null));
+        } else {
+          done(null);
+        }
+      },
+      (err: any) => {
+        setLocating(false);
+        setNote(
+          err && err.code === err.PERMISSION_DENIED
+            ? "Location permission is blocked — allow it in your browser, or drop a pin on the map."
+            : "Couldn't get your current location — drop a pin on the map instead.",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 10000 },
+    );
+  }
+
   const activeLabel = active === "origin" ? "pickup (A)" : "drop-off (B)";
 
   return (
@@ -340,6 +394,19 @@ export default function LocationPicker({
           <p className="mt-1 text-xs text-amber">{note}</p>
         ) : null}
       </div>
+
+      {/* use the device's current location for the active pin */}
+      <button
+        type="button"
+        onClick={useMyLocation}
+        disabled={locating}
+        className="ct-btn-ghost w-full justify-center py-2 text-xs disabled:opacity-60"
+      >
+        <Locate className="h-3.5 w-3.5" />
+        {locating
+          ? "Getting your location…"
+          : `Use my current location for ${activeLabel}`}
+      </button>
 
       {/* the map */}
       <div className="h-[320px] overflow-hidden rounded-lg border border-border">
