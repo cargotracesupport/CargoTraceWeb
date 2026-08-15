@@ -9,9 +9,10 @@ import { Locate, Check, Clock, Navigation } from "@/components/icons";
 import { roadRouteDetailed } from "@/lib/route";
 import { formatEta, formatKm, haversineKm } from "@/lib/eta";
 
-// Same pickup-visited detection as the trip card: within this distance of the
-// pickup, the driver has collected the goods and routing skips the pickup.
-const PICKUP_REACHED_KM = 0.3;
+// How close the driver must be to the pickup for the "Confirm pickup" button to
+// unlock. The driver still confirms collection explicitly — this only enables
+// the button (a generous radius so it's ready as they approach).
+const PICKUP_REACHED_KM = 2;
 
 type Place = { lat: number; lng: number; label: string | null };
 type Pos = { lat: number; lng: number; speed: number | null; heading: number | null };
@@ -441,7 +442,7 @@ export default function DriverTrip({
                 <p className="text-center text-xs text-muted">
                   {nearPickup
                     ? "You're at the pickup — confirm once you've collected the goods."
-                    : "Enabled once you're within ~300 m of the pickup."}
+                    : "Enabled once you're within ~2 km of the pickup."}
                 </p>
               </>
             ) : (

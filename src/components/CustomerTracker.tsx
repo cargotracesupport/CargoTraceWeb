@@ -566,7 +566,19 @@ export default function CustomerTracker({
                 {delivery.driver.phone}
               </a>
             ) : null}
-            {hasPosition ? (
+            {isDelivered ? (
+              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-green/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-green">
+                <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                Delivered
+                {delivery.delivered_at ? (
+                  <> · {fmtTime(delivery.delivered_at)}</>
+                ) : null}
+              </p>
+            ) : isCancelled ? (
+              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-red/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-red">
+                Delivery cancelled
+              </p>
+            ) : hasPosition ? (
               <p
                 className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
                   headingToPickup ? "bg-amber/10 text-amber" : "bg-green/10 text-green"
