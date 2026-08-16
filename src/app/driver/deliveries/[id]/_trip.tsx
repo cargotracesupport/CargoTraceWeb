@@ -8,6 +8,12 @@ import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import { Locate, Check, Clock, Navigation } from "@/components/icons";
 import { roadRouteDetailed } from "@/lib/route";
 import { formatEta, formatKm, haversineKm } from "@/lib/eta";
+import {
+  watchDriver,
+  isNativeTracking,
+  type DriverFix,
+  type DriverWatch,
+} from "@/lib/driverGeo";
 
 // How close the driver must be to the pickup for the "Confirm pickup" button to
 // unlock. The driver still confirms collection explicitly — this only enables
@@ -49,7 +55,7 @@ export default function DriverTrip({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const watchRef = useRef<number | null>(null);
+  const watchRef = useRef<DriverWatch | null>(null);
   const [nearPickup, setNearPickup] = useState(false);
   const [nearDropoff, setNearDropoff] = useState(false);
   const [confirmingPickup, setConfirmingPickup] = useState(false);
@@ -84,26 +90,24 @@ export default function DriverTrip({
   destRef.current = dest;
 
   const stopGps = useCallback(() => {
-    if (watchRef.current != null && typeof navigator !== "undefined") {
-      navigator.geolocation.clearWatch(watchRef.current);
-    }
+    watchRef.current?.stop();
     watchRef.current = null;
   }, []);
 
   // Push one GPS fix to the (authenticated, ownership-checked) ingest endpoint.
   const sendPing = useCallback(
-    async (p: GeolocationPosition) => {
+    async (fix: DriverFix) => {
       try {
         await fetch("/api/track", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             deliveryId,
-            lat: p.coords.latitude,
-            lng: p.coords.longitude,
-            speed: p.coords.speed != null ? p.coords.speed * 3.6 : null,
-            heading: p.coords.heading,
-            recordedAt: new Date(p.timestamp).toISOString(),
+            lat: fix.lat,
+            lng: fix.lng,
+            speed: fix.speed,
+            heading: fix.heading,
+            recordedAt: fix.at,
           }),
         });
       } catch {
@@ -127,27 +131,24 @@ export default function DriverTrip({
   }, [deliveryId]);
 
   const startGps = useCallback(() => {
-    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-      setGps("error");
-      setGpsMsg("Location is not available on this device.");
-      return;
-    }
     if (watchRef.current != null) return; // already watching
     setGps("starting");
     setGpsMsg(null);
-    watchRef.current = navigator.geolocation.watchPosition(
-      (p) => {
+    // watchDriver picks the backend: browser Geolocation on the web, or the
+    // native background-location service inside the Capacitor Android shell.
+    watchRef.current = watchDriver(
+      (fix) => {
         setGps("on");
         deniedReportedRef.current = false; // location back → allow a future alert
         setPos({
-          lat: p.coords.latitude,
-          lng: p.coords.longitude,
-          speed: p.coords.speed != null ? p.coords.speed * 3.6 : null,
-          heading: p.coords.heading,
+          lat: fix.lat,
+          lng: fix.lng,
+          speed: fix.speed,
+          heading: fix.heading,
         });
         // Track proximity to the pickup — this only ENABLES the "Confirm pickup"
         // button. The driver confirms collection explicitly (no auto-mark).
-        const here = { lat: p.coords.latitude, lng: p.coords.longitude };
+        const here = { lat: fix.lat, lng: fix.lng };
         const o = originRef.current;
         setNearPickup(
           o != null && haversineKm(here, { lat: o.lat, lng: o.lng }) <= PICKUP_REACHED_KM,
@@ -159,19 +160,18 @@ export default function DriverTrip({
           dst == null ||
             haversineKm(here, { lat: dst.lat, lng: dst.lng }) <= DROPOFF_REACHED_KM,
         );
-        void sendPing(p);
+        void sendPing(fix);
       },
-      (err) => {
-        if (err.code === err.PERMISSION_DENIED) {
+      (e) => {
+        if (e.denied) {
           setGps("denied");
           setGpsMsg(null);
           reportLocationDenied();
         } else {
           setGps("error");
-          setGpsMsg(err.message || "Could not get your location.");
+          setGpsMsg(e.message || "Could not get your location.");
         }
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 },
     );
   }, [sendPing, reportLocationDenied]);
 
@@ -273,7 +273,11 @@ export default function DriverTrip({
 
   const gpsPill =
     gps === "on"
-      ? { dot: "bg-green", text: "text-green", label: "Live GPS" }
+      ? {
+          dot: "bg-green",
+          text: "text-green",
+          label: isNativeTracking() ? "Live GPS · background" : "Live GPS",
+        }
       : gps === "starting"
         ? { dot: "bg-amber", text: "text-amber", label: "Locating…" }
         : gps === "denied" || gps === "error"
