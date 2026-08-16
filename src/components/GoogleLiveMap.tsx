@@ -16,7 +16,7 @@ import type { LiveMapProps } from "@/components/liveMapTypes";
 // Colours for the route line. The part already travelled (behind the vehicle)
 // is drawn grey; the part still ahead stays blue.
 const ROUTE_AHEAD = "#2f9bd1";
-const ROUTE_PAST = "#9aa4b2";
+const ROUTE_PAST = "#6b7685";
 
 // "You are here" blue dot (Google-style) for the current-location button.
 const YOU_DOT =
@@ -210,18 +210,23 @@ export default function GoogleLiveMap({
       pts: Array<[number, number]>,
       color: string,
       opacity: number,
+      weight: number,
+      zIndex: number,
     ) =>
       new g.Polyline({
         map,
         path: pts.map(([lng, lat]) => ({ lat, lng })),
         strokeColor: color,
         strokeOpacity: opacity,
-        strokeWeight: 4,
+        strokeWeight: weight,
+        zIndex,
       });
 
-    if (past.length >= 2) polylinesRef.current.push(line(past, ROUTE_PAST, 0.7));
+    // Traveled (behind the vehicle) = solid grey; road ahead = bold blue on top.
+    if (past.length >= 2)
+      polylinesRef.current.push(line(past, ROUTE_PAST, 0.95, 6, 1));
     if (ahead.length >= 2)
-      polylinesRef.current.push(line(ahead, ROUTE_AHEAD, 0.95));
+      polylinesRef.current.push(line(ahead, ROUTE_AHEAD, 1, 6, 2));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeCoords, truckKey, ready]);
 
