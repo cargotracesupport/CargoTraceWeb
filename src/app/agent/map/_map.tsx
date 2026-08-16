@@ -153,7 +153,11 @@ export default function AgentMap({
     [deliveries, selected, now],
   );
 
-  const { route, roadFrom, roadTo } = useSelectedRoute(selected);
+  // Draw the route for the selected delivery; if none is selected but there's a
+  // single active delivery, default to it so the overview shows the road too
+  // (not just disconnected pins).
+  const routeFor = selected ?? (deliveries.length === 1 ? deliveries[0] : null);
+  const { route, roadFrom, roadTo } = useSelectedRoute(routeFor);
 
   // Fly to the driver's live position when available; fall back to origin/dest.
   const focus = !selected
