@@ -100,17 +100,31 @@ export async function groupByRoad<T>(
         for (let pos = 0; pos <= seq.length; pos++) {
           const prev = pos === 0 ? O : destIdx.get(seq[pos - 1].id)!;
           const next = pos === seq.length ? null : destIdx.get(seq[pos].id)!;
-          const added =
-            next == null
-              ? dur(prev, di) // pure extension past the last stop
-              : dur(prev, di) + dur(di, next) - dur(prev, next);
+          // Guard unreachable legs (Infinity in the matrix). Computing the detour
+          // directly would give Infinity − Infinity = NaN, and a NaN "best" would
+          // then win the slot but lose every later comparison (NaN < x is always
+          // false) — blocking a stop from joining a route it genuinely fits.
+          let added: number;
+          if (next == null) {
+            added = dur(prev, di); // pure extension past the last stop
+          } else {
+            const a = dur(prev, di);
+            const b = dur(di, next);
+            const c = dur(prev, next);
+            added =
+              Number.isFinite(a) && Number.isFinite(b) && Number.isFinite(c)
+                ? a + b - c
+                : Infinity;
+          }
           if (best == null || added < best.added) best = { seq, pos, added };
         }
       }
       const tol = best
         ? Math.max(maxDetourSec, detourFrac * routeLength(best.seq, O))
         : 0;
-      if (best && best.added <= tol) best.seq.splice(best.pos, 0, it);
+      // Never insert an unreachable stop (Infinity/NaN added) — it gets its own route.
+      if (best && Number.isFinite(best.added) && best.added <= tol)
+        best.seq.splice(best.pos, 0, it);
       else routes.push([it]);
     }
     groups.push(...routes);

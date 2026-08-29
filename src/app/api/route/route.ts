@@ -131,23 +131,41 @@ async function osrmRoute(wp: LngLat[]): Promise<RouteOut | null> {
   }
 }
 
-// Authorize the caller. This endpoint calls Google Routes (TRAFFIC_AWARE — the
-// priciest tier) when GOOGLE_ROUTES_KEY is set, so it must not be an open proxy
-// for the whole internet. Allowed callers: a signed-in staff session (admin /
-// agent / driver), OR a valid customer tracking token (the public tracking page
-// genuinely needs routing — a plain session check would lock every customer out).
-async function authorized(token: unknown): Promise<boolean> {
-  if (await getSessionProfile()) return true;
-  if (typeof token === "string" && token.length > 0) {
-    const admin = createAdminClient();
-    const { data } = await admin
-      .from("deliveries")
-      .select("id")
-      .eq("tracking_token", token)
-      .maybeSingle();
-    if (data) return true;
+// A leaked tracking link should not be an unlimited tap on the Google quota, so
+// the token path is rate-limited. Customers need very few calls (the client
+// caches routes and only re-fetches when the driver moves ~1 km); this cap is
+// generous for them but blunts abuse.
+const RL_LIMIT = 30;
+const RL_WINDOW_S = 60;
+
+// Gate the caller. This endpoint calls Google Routes (TRAFFIC_AWARE — the
+// priciest tier) when GOOGLE_ROUTES_KEY is set, so it must not be an open proxy.
+// Signed-in staff (admin / agent / driver) pass freely; otherwise a valid
+// customer tracking token is required (the public tracker genuinely needs
+// routing) and is rate-limited per token. Returns an error response, or null.
+async function gate(token: unknown): Promise<NextResponse | null> {
+  if (await getSessionProfile()) return null; // trusted staff session
+  const t = typeof token === "string" ? token : "";
+  if (!t) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("deliveries")
+    .select("id")
+    .eq("tracking_token", t)
+    .maybeSingle();
+  if (!data) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+    p_key: `route:${t}`,
+    p_limit: RL_LIMIT,
+    p_window_seconds: RL_WINDOW_S,
+  });
+  if (allowed === false) {
+    return NextResponse.json(
+      { error: "rate limited" },
+      { status: 429, headers: { "Retry-After": String(RL_WINDOW_S) } },
+    );
   }
-  return false;
+  return null;
 }
 
 export async function POST(req: Request) {
@@ -157,9 +175,8 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
-  if (!(await authorized(body.token))) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+  const denied = await gate(body.token);
+  if (denied) return denied;
   const wp = body.waypoints;
   if (!validWaypoints(wp)) {
     return NextResponse.json({ error: "invalid waypoints" }, { status: 400 });

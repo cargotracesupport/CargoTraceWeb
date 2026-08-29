@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSessionProfile } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,9 @@ export const dynamic = "force-dynamic";
 type LngLat = [number, number];
 
 const MAX_POINTS = 90; // OSRM /table demo cap is ~100.
+// OSRM snaps each point to the nearest road; a point snapped farther than this
+// from its real location has fictitious durations and is dropped from grouping.
+const SNAP_MAX_M = 5000;
 
 const cache = new Map<string, number[][]>();
 const keyOf = (pts: LngLat[]) =>
@@ -36,6 +40,12 @@ function validPoints(v: unknown): v is LngLat[] {
 }
 
 export async function POST(req: Request) {
+  // Both callers (agent dispatch board, driver trip list) are behind a login,
+  // so require a session — this endpoint hits OSRM and must not be an open proxy.
+  if (!(await getSessionProfile())) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   let body: { points?: unknown };
   try {
     body = await req.json();
@@ -66,7 +76,10 @@ export async function POST(req: Request) {
         { status: 502 },
       );
     }
-    const json = (await res.json()) as { durations?: (number | null)[][] };
+    const json = (await res.json()) as {
+      durations?: (number | null)[][];
+      sources?: { distance?: number }[];
+    };
     const d = json.durations;
     if (!Array.isArray(d) || d.length !== pts.length) {
       return NextResponse.json(
@@ -74,7 +87,18 @@ export async function POST(req: Request) {
         { status: 502 },
       );
     }
-    const clean = d.map((row) => row.map((v) => (v == null ? -1 : v)));
+    // Points OSRM snapped far from their real location produce fictitious
+    // durations (a Kannur drop-off snapped onto a Kozhikode road looks "on the
+    // way"). Mark them unreachable (-1) so grouping never folds them into another
+    // driver's trip; they'll simply get their own route.
+    const snapped = json.sources ?? [];
+    const bad = pts.map((_p, i) => {
+      const dist = snapped[i]?.distance;
+      return typeof dist === "number" && dist > SNAP_MAX_M;
+    });
+    const clean = d.map((row, i) =>
+      row.map((v, j) => (bad[i] || bad[j] || v == null ? -1 : v)),
+    );
     if (cache.size > 200) cache.clear();
     cache.set(key, clean);
     return NextResponse.json(
