@@ -38,6 +38,7 @@ export default function GoogleLiveMap({
   className,
   fit = true,
   pitch = 0,
+  routeToken,
 }: LiveMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -170,7 +171,7 @@ export default function GoogleLiveMap({
         isValidLngLat(roadFrom[0], roadFrom[1]) &&
         isValidLngLat(roadTo[0], roadTo[1])
       ) {
-        coords = await roadRoute(roadFrom, roadTo);
+        coords = await roadRoute(roadFrom, roadTo, routeToken);
       }
       if (!cancelled) setRouteCoords(coords ?? null);
     })();

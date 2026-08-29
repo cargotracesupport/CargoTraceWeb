@@ -26,4 +26,9 @@ export interface LiveMapProps {
   fit?: boolean;
   /** Camera tilt. 0 = flat/top-down (default); higher tilts into a 3D view. */
   pitch?: number;
+  /**
+   * Customer tracking token. Passed to /api/route so the public tracker can
+   * fetch the by-road path without a session. Staff maps omit it (cookie auth).
+   */
+  routeToken?: string;
 }

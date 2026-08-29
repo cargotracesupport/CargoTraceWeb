@@ -19,6 +19,9 @@ const keyOf = (pts: LngLat[]) =>
  */
 export async function roadRouteDetailed(
   points: LngLat[],
+  // Optional tracking token — sent so the public customer tracker can authorize
+  // /api/route without a session. Staff callers omit it (their cookie authorizes).
+  token?: string,
 ): Promise<DetailedRoute | null> {
   if (points.length < 2) return null;
   const key = keyOf(points);
@@ -27,7 +30,9 @@ export async function roadRouteDetailed(
     const res = await fetch("/api/route", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ waypoints: points }),
+      body: JSON.stringify(
+        token ? { waypoints: points, token } : { waypoints: points },
+      ),
     });
     if (res.ok) {
       const j = (await res.json()) as Partial<DetailedRoute>;
@@ -52,8 +57,12 @@ export async function roadRouteDetailed(
  * By-road driving path A→B as a list of [lng, lat] points. Falls back to a
  * straight line when routing is unavailable, so the map always draws something.
  */
-export async function roadRoute(from: LngLat, to: LngLat): Promise<LngLat[]> {
-  const d = await roadRouteDetailed([from, to]);
+export async function roadRoute(
+  from: LngLat,
+  to: LngLat,
+  token?: string,
+): Promise<LngLat[]> {
+  const d = await roadRouteDetailed([from, to], token);
   return d?.coords ?? [from, to];
 }
 
@@ -61,8 +70,11 @@ export async function roadRoute(from: LngLat, to: LngLat): Promise<LngLat[]> {
  * By-road driving path through an ordered list of waypoints (pickup → A → B …),
  * as one [lng, lat] polyline. Falls back to straight segments joining the points.
  */
-export async function roadRouteThrough(points: LngLat[]): Promise<LngLat[]> {
+export async function roadRouteThrough(
+  points: LngLat[],
+  token?: string,
+): Promise<LngLat[]> {
   if (points.length < 2) return points;
-  const d = await roadRouteDetailed(points);
+  const d = await roadRouteDetailed(points, token);
   return d?.coords ?? points;
 }

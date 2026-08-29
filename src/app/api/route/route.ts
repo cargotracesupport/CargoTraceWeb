@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getSessionProfile } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -129,12 +131,34 @@ async function osrmRoute(wp: LngLat[]): Promise<RouteOut | null> {
   }
 }
 
+// Authorize the caller. This endpoint calls Google Routes (TRAFFIC_AWARE — the
+// priciest tier) when GOOGLE_ROUTES_KEY is set, so it must not be an open proxy
+// for the whole internet. Allowed callers: a signed-in staff session (admin /
+// agent / driver), OR a valid customer tracking token (the public tracking page
+// genuinely needs routing — a plain session check would lock every customer out).
+async function authorized(token: unknown): Promise<boolean> {
+  if (await getSessionProfile()) return true;
+  if (typeof token === "string" && token.length > 0) {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("deliveries")
+      .select("id")
+      .eq("tracking_token", token)
+      .maybeSingle();
+    if (data) return true;
+  }
+  return false;
+}
+
 export async function POST(req: Request) {
-  let body: { waypoints?: unknown };
+  let body: { waypoints?: unknown; token?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
+  }
+  if (!(await authorized(body.token))) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const wp = body.waypoints;
   if (!validWaypoints(wp)) {

@@ -273,7 +273,7 @@ export default function CustomerTracker({
     if (delivery.dest_lat != null && delivery.dest_lng != null) {
       pts.push([delivery.dest_lng, delivery.dest_lat]);
     }
-    roadRouteThrough(pts).then((r) => {
+    roadRouteThrough(pts, token).then((r) => {
       if (!cancelled) setPickupRoute(r);
     });
     return () => {
@@ -639,6 +639,7 @@ export default function CustomerTracker({
                 route={headingToPickup ? pickupRoute : undefined}
                 roadFrom={headingToPickup ? undefined : roadFrom}
                 roadTo={headingToPickup ? undefined : roadTo}
+                routeToken={token}
                 fit
                 className="h-full w-full"
               />
