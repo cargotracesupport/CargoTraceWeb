@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -33,6 +33,46 @@ interface Created {
   phone: string;
   name: string;
   reference: string;
+  /** Whether the agent chose to send the customer the drop-off link. */
+  sendLink: boolean;
+}
+
+/** A customer's most recent drop-off, reused for repeat deliveries. */
+type SavedDropoff = { lat: number; lng: number; label: string | null };
+type SavedRow = {
+  dest_lat: number | null;
+  dest_lng: number | null;
+  dest_label: string | null;
+};
+
+// The most recent drop-off this customer set on a past delivery — linked by
+// customer_id, falling back to phone for deliveries created before the customer
+// master existed. Null when they've never set one.
+async function fetchLastDropoff(c: Customer): Promise<SavedDropoff | null> {
+  const supabase = createClient();
+  const pick = (d: SavedRow | null): SavedDropoff | null =>
+    d && d.dest_lat != null && d.dest_lng != null
+      ? { lat: d.dest_lat, lng: d.dest_lng, label: d.dest_label }
+      : null;
+  const byId = await supabase
+    .from("deliveries")
+    .select("dest_lat, dest_lng, dest_label")
+    .eq("customer_id", c.id)
+    .not("dest_lat", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const fromId = pick(byId.data as SavedRow | null);
+  if (fromId || !c.phone) return fromId;
+  const byPhone = await supabase
+    .from("deliveries")
+    .select("dest_lat, dest_lng, dest_label")
+    .eq("customer_phone", c.phone)
+    .not("dest_lat", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return pick(byPhone.data as SavedRow | null);
 }
 
 
@@ -138,15 +178,32 @@ export default function NewDeliveryForm({
     delivery?.customer_email ?? "",
   );
 
-  // Picked a saved customer → fill their details; blank → one-off (unlinked).
+  // "Send the customer a tracking link so they set the drop-off." Checked by
+  // default (a new customer must tell us where to deliver). Picking a saved
+  // customer who already set a drop-off on a past delivery unticks it and
+  // reuses that drop-off, so the delivery is ready to assign with no link.
+  const [sendLink, setSendLink] = useState(true);
+  const [lastDropoff, setLastDropoff] = useState<SavedDropoff | null>(null);
+  const dropoffReq = useRef(0); // drop stale lookups if the agent picks again quickly
+
+  // Picked a saved customer → fill their details and look up their last
+  // drop-off; blank → one-off (unlinked), link on by default.
   function applyCustomer(c: Customer | null) {
+    const req = ++dropoffReq.current;
     if (c) {
       setCustomerId(c.id);
       setCustomerName(c.name ?? "");
       setCustomerPhone(c.phone ?? "");
       setCustomerEmail(c.email ?? "");
+      fetchLastDropoff(c).then((d) => {
+        if (req !== dropoffReq.current) return; // a newer pick superseded this
+        setLastDropoff(d);
+        setSendLink(!d); // known drop-off → reuse it and skip the link
+      });
     } else {
       setCustomerId("");
+      setLastDropoff(null);
+      setSendLink(true);
     }
   }
   const [driverId, setDriverId] = useState(delivery?.driver_id ?? "");
@@ -254,6 +311,13 @@ export default function NewDeliveryForm({
       );
       return;
     }
+    // Skipping the link means reusing a saved drop-off — so there must be one.
+    if (!editing && !sendLink && !lastDropoff) {
+      setError(
+        "This customer has no saved drop-off yet — tick “Send the customer a tracking link” so they can set it.",
+      );
+      return;
+    }
 
     setBusy(true);
     const supabase = createClient();
@@ -321,16 +385,19 @@ export default function NewDeliveryForm({
     }
 
     // ── Create ────────────────────────────────────────────────────
+    // Unticked "send link" = reuse the customer's saved drop-off, so the
+    // delivery is created 'pending' (ready to assign) instead of waiting on
+    // the customer. Ticked = leave it for them to set from their link.
+    const saved = !sendLink ? lastDropoff : null; // reuse only when the link is skipped
     const { data, error: err } = await supabase
       .from("deliveries")
       .insert({
         org_id: orgId,
         ...fields,
-        // No drop-off yet — the customer sets it from their link.
-        dest_label: null,
-        dest_lat: null,
-        dest_lng: null,
-        status: "awaiting_dropoff",
+        dest_label: saved?.label ?? null,
+        dest_lat: saved?.lat ?? null,
+        dest_lng: saved?.lng ?? null,
+        status: saved ? "pending" : "awaiting_dropoff",
         assigned_at: driverId ? new Date().toISOString() : null,
       })
       .select("tracking_token")
@@ -351,6 +418,7 @@ export default function NewDeliveryForm({
       phone: customerPhone.trim(),
       name: customerName.trim(),
       reference: reference.trim(),
+      sendLink,
     });
   }
 
@@ -368,28 +436,43 @@ export default function NewDeliveryForm({
   // Success state — send the drop-off link to the customer on WhatsApp.
   if (created) {
     const url = trackUrl(created.token);
-    const msg =
-      `Hi${created.name ? " " + created.name : ""}, your delivery ${created.reference || ""}`.trim() +
-      ` is booked. Please open this link and set your drop-off location: ${url}`;
+    const greet = `Hi${created.name ? " " + created.name : ""}, your delivery ${created.reference || ""}`.trim();
+    // Link needed → ask them to set the drop-off; reused drop-off → just a tracker.
+    const msg = created.sendLink
+      ? `${greet} is booked. Please open this link and set your drop-off location: ${url}`
+      : `${greet} is booked to your usual drop-off. Track it here: ${url}`;
     const wa = whatsappUrl(created.phone, msg);
     return (
       <div className="ct-card flex flex-col gap-4 p-6 text-center">
         <div>
           <div className="text-2xl font-semibold text-green">Delivery created</div>
           <p className="mt-1 text-sm text-muted2">
-            Send the customer their link so they can set the drop-off location.
+            {created.sendLink
+              ? "Send the customer their link so they can set the drop-off location."
+              : "Created with the customer's saved drop-off — it's ready to assign a driver. No link needed."}
           </p>
         </div>
 
-        <a
-          href={wa}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="ct-btn-primary w-full !py-3"
-          style={{ backgroundImage: "none", backgroundColor: "#25D366" }}
-        >
-          Send on WhatsApp ({created.phone})
-        </a>
+        {created.sendLink ? (
+          <a
+            href={wa}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ct-btn-primary w-full !py-3"
+            style={{ backgroundImage: "none", backgroundColor: "#25D366" }}
+          >
+            Send on WhatsApp ({created.phone})
+          </a>
+        ) : (
+          <a
+            href={wa}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ct-btn-ghost w-full justify-center"
+          >
+            Send tracking link on WhatsApp (optional)
+          </a>
+        )}
 
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
@@ -825,13 +908,33 @@ export default function NewDeliveryForm({
       </fieldset>
       ) : null}
 
-      {/* On create, tell the dispatcher what happens next. */}
+      {/* On create: send the drop-off link, or reuse the customer's saved drop-off. */}
       {!editing ? (
-        <p className="rounded-lg bg-s2 px-3 py-2 text-xs text-muted2">
-          No driver is chosen now. Once the customer sets their drop-off, this
-          delivery becomes ready to assign on the dispatch board — where you can
-          put several same-route deliveries on one driver.
-        </p>
+        <div className="flex flex-col gap-2">
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-s2 px-3 py-3 text-sm">
+            <input
+              type="checkbox"
+              checked={sendLink}
+              onChange={(e) => setSendLink(e.target.checked)}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              <span className="font-medium text-text">
+                Send the customer a tracking link to set their drop-off
+              </span>
+              <span className="mt-0.5 block text-xs text-muted2">
+                {lastDropoff
+                  ? `Unticked: reuse their saved drop-off (${lastDropoff.label ?? "saved location"}) and skip the link — the delivery is ready to assign immediately.`
+                  : "New customers need the link to tell us where to deliver."}
+              </span>
+            </span>
+          </label>
+          <p className="rounded-lg bg-s2 px-3 py-2 text-xs text-muted2">
+            {sendLink
+              ? "No driver is chosen now. Once the customer sets their drop-off, this delivery becomes ready to assign on the dispatch board."
+              : "The delivery will be created ready to assign on the dispatch board, using the customer's saved drop-off."}
+          </p>
+        </div>
       ) : null}
 
       {/* Status — admin sets it directly when editing */}
