@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   try {
     const res = await fetch(url, {
       redirect: "follow",
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; CargoTrace/1.0)" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Goodswala/1.0)" },
       cache: "no-store",
     });
     // coordinates in the final URL after the redirect(s)?

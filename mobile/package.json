@@ -1,8 +1,8 @@
 {
-  "name": "cargotrace-driver-shell",
+  "name": "goodswala-driver-shell",
   "version": "0.1.0",
   "private": true,
-  "description": "Capacitor Android shell that adds always-on background location to the CargoTrace driver web app.",
+  "description": "Capacitor Android shell that adds always-on background location to the Goodswala driver web app.",
   "scripts": {
     "add:android": "cap add android",
     "sync": "cap sync",

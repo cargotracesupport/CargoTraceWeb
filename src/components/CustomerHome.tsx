@@ -153,7 +153,7 @@ export default function CustomerHome({ token }: { token?: string }) {
       <div className="flex flex-col items-center gap-1 text-center">
         <BrandMark className="h-11 w-11" />
         <h1 className="text-xl font-bold tracking-tight">
-          Cargo<span className="text-primary">Trace</span>
+          Goods<span className="text-primary">wala</span>
         </h1>
         <p className="text-xs font-semibold uppercase tracking-wide text-muted2">
           My deliveries

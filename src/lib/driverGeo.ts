@@ -86,7 +86,7 @@ function watchNative(
   const p = BG.addWatcher(
     {
       // Text shown in the persistent notification while tracking in background.
-      backgroundTitle: "CargoTrace is tracking your delivery",
+      backgroundTitle: "Goodswala is tracking your delivery",
       backgroundMessage: "Sharing your live location with the customer.",
       requestPermissions: true,
       stale: false,

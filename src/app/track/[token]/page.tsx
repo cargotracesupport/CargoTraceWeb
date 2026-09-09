@@ -28,7 +28,7 @@ export default async function TrackPage({
       <main className="min-h-dvh bg-bg text-text flex items-center justify-center p-6">
         <div className="ct-card max-w-sm w-full text-center p-8">
           <div className="text-2xl font-semibold mb-2">
-            Cargo<span className="text-green">Trace</span>
+            Goods<span className="text-green">wala</span>
           </div>
           <p className="text-lg font-medium mt-4">Tracking link not found</p>
           <p className="text-muted2 mt-2 text-sm">

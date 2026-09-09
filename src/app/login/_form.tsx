@@ -100,7 +100,7 @@ export default function LoginForm() {
             Every delivery, live on the map.
           </h2>
           <p className="mt-3 text-sm leading-relaxed text-white/85">
-            CargoTrace turns each shipment into a shareable, real-time journey —
+            Goodswala turns each shipment into a shareable, real-time journey —
             from your warehouse to your customer&rsquo;s door.
           </p>
           <ul className="mt-6 space-y-3">
@@ -116,7 +116,7 @@ export default function LoginForm() {
         </div>
 
         <p className="text-xs text-white/70">
-          © {new Date().getFullYear()} CargoTrace · Live delivery tracking
+          © {new Date().getFullYear()} Goodswala · Live delivery tracking
         </p>
       </section>
 
@@ -220,7 +220,7 @@ export default function LoginForm() {
           </div>
 
           <p className="mt-5 text-center text-[11px] text-muted">
-            Accounts are created by your CargoTrace administrator.
+            Accounts are created by your Goodswala administrator.
           </p>
         </div>
       </section>

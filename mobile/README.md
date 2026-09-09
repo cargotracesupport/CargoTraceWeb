@@ -1,7 +1,7 @@
-# CargoTrace Driver — Android shell (background location)
+# Goodswala Driver — Android shell (background location)
 
 A thin [Capacitor](https://capacitorjs.com) Android app that wraps the **existing
-deployed CargoTrace web app** and adds a **native background-location service**.
+deployed Goodswala web app** and adds a **native background-location service**.
 It exists to solve the one thing a website can't do: keep a driver's GPS
 streaming when they switch to Google Maps or lock the screen.
 
@@ -70,11 +70,11 @@ Then in Android Studio: pick a device/emulator and **Run**, or
 
 ## Test the background behaviour
 
-1. Install the APK on a phone and open it → the CargoTrace login loads.
+1. Install the APK on a phone and open it → the Goodswala login loads.
 2. Log in as a **driver**, open an assigned delivery, tap **Start trip**, and
    grant **"Allow all the time"** location.
 3. The GPS pill shows **"Live GPS · background"** and a persistent notification
-   appears ("CargoTrace is tracking your delivery").
+   appears ("Goodswala is tracking your delivery").
 4. Switch to Google Maps / lock the screen for a few minutes.
 5. On the admin/agent dispatch map, the driver keeps moving — no more freeze.
 

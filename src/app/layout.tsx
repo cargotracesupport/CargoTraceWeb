@@ -11,7 +11,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 // Data font — coordinates, IDs, ETA, stats, timestamps. Per the design system,
-// CargoTrace uses DM Mono for all data, "no substitutions".
+// Goodswala uses DM Mono for all data, "no substitutions".
 const dmMono = DM_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
@@ -19,7 +19,7 @@ const dmMono = DM_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CargoTrace — Live Delivery Tracking",
+  title: "Goodswala — Live Delivery Tracking",
   description: "Track deliveries from A to B in real time.",
 };
 

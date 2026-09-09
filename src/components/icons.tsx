@@ -247,7 +247,7 @@ export const Play = ({ className = "h-5 w-5", ...rest }: IconProps) => (
   </svg>
 );
 
-/** The CargoTrace brand mark: a rounded badge with a truck glyph. */
+/** The Goodswala brand mark: a rounded badge with a truck glyph. */
 export function BrandMark({ className = "h-9 w-9" }: { className?: string }) {
   return (
     <span
@@ -259,11 +259,11 @@ export function BrandMark({ className = "h-9 w-9" }: { className?: string }) {
   );
 }
 
-/** The wordmark: Cargo + green Trace. */
+/** The wordmark: Goods + gradient wala. */
 export function Wordmark({ className = "" }: { className?: string }) {
   return (
     <span className={`font-semibold tracking-tight ${className}`}>
-      Cargo<span className="text-gradient">Trace</span>
+      Goods<span className="text-gradient">wala</span>
     </span>
   );
 }

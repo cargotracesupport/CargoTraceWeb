@@ -1,6 +1,6 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
-// Capacitor Android shell for the CargoTrace *driver* app. Its only job is to
+// Capacitor Android shell for the Goodswala *driver* app. Its only job is to
 // wrap the existing deployed web app in a native container that can run the
 // background-location foreground service — so a driver's GPS keeps streaming to
 // /api/track even when they switch to Google Maps or lock the screen.
@@ -11,8 +11,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
 // exists (Capacitor requirement); the placeholder in ./www is only shown if the
 // live URL can't be reached.
 const config: CapacitorConfig = {
-  appId: "com.cargotrace.driver",
-  appName: "CargoTrace Driver",
+  appId: "com.goodswala.driver",
+  appName: "Goodswala Driver",
   webDir: "www",
   server: {
     // 👉 Set this to your production URL (or a LAN URL like http://192.168.1.10:3000
