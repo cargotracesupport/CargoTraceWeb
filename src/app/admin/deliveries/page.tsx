@@ -2,7 +2,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { Delivery } from "@/lib/types";
 import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
-import SimulateButton from "@/components/SimulateButton";
 import DeleteButton from "@/components/DeleteButton";
 import WhatsAppLink from "@/components/WhatsAppLink";
 import { trackShareMessage } from "@/lib/share";
@@ -23,17 +22,6 @@ function fmtDate(iso: string | null): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function originOf(d: DeliveryRow) {
-  return d.origin_lat != null && d.origin_lng != null
-    ? { lat: d.origin_lat, lng: d.origin_lng }
-    : null;
-}
-function destOf(d: DeliveryRow) {
-  return d.dest_lat != null && d.dest_lng != null
-    ? { lat: d.dest_lat, lng: d.dest_lng }
-    : null;
 }
 
 function Th({
@@ -97,7 +85,6 @@ function RowActions({ d }: { d: DeliveryRow }) {
       >
         <Locate className="h-3.5 w-3.5" />
       </Link>
-      <SimulateButton deliveryId={d.id} origin={originOf(d)} dest={destOf(d)} />
       <DeleteButton
         table="deliveries"
         id={d.id}

@@ -84,7 +84,7 @@ function VehiclesCard({
     const { error: err } = await supabase.from("vehicles").insert({
       org_id: orgId,
       name: name.trim(),
-      plate: plate.trim() || null,
+      plate: plate.trim().toUpperCase() || null,
       agent_id: ownerAgentId || null,
       length_m: lengthM ? Number(lengthM) : null,
       width_m: widthM ? Number(widthM) : null,
@@ -143,7 +143,7 @@ function VehiclesCard({
             <input
               id="vehicle_plate"
               value={plate}
-              onChange={(e) => setPlate(e.target.value)}
+              onChange={(e) => setPlate(e.target.value.toUpperCase())}
               placeholder="ABC 1234"
               className="ct-input font-mono"
             />
@@ -241,8 +241,8 @@ function AdminVehicleRow({
     const { error: err } = await supabase
       .from("vehicles")
       .update({
-        name: name.trim() || plate.trim(),
-        plate: plate.trim() || null,
+        name: name.trim() || plate.trim().toUpperCase(),
+        plate: plate.trim().toUpperCase() || null,
         agent_id: ownerAgentId || null,
         length_m: lengthM ? Number(lengthM) : null,
         width_m: widthM ? Number(widthM) : null,
@@ -272,7 +272,7 @@ function AdminVehicleRow({
           />
           <input
             value={plate}
-            onChange={(e) => setPlate(e.target.value)}
+            onChange={(e) => setPlate(e.target.value.toUpperCase())}
             placeholder="Plate (optional)"
             className="ct-input font-mono"
             aria-label="Plate"

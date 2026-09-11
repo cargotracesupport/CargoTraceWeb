@@ -35,7 +35,7 @@ export default function VehiclesManager({
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const plate = number.trim();
+    const plate = number.trim().toUpperCase();
     const supabase = createClient();
     const { error: err } = await supabase.from("vehicles").insert({
       org_id: orgId,
@@ -86,7 +86,7 @@ export default function VehiclesManager({
               id="veh_number"
               required
               value={number}
-              onChange={(e) => setNumber(e.target.value)}
+              onChange={(e) => setNumber(e.target.value.toUpperCase())}
               placeholder="MH 12 AB 1234"
               className="ct-input font-mono uppercase"
             />
@@ -165,7 +165,7 @@ function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const plate = number.trim();
+    const plate = number.trim().toUpperCase();
     const supabase = createClient();
     const { error: err } = await supabase
       .from("vehicles")
@@ -192,7 +192,7 @@ function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
         <form onSubmit={save} className="flex flex-col gap-2">
           <input
             value={number}
-            onChange={(e) => setNumber(e.target.value)}
+            onChange={(e) => setNumber(e.target.value.toUpperCase())}
             required
             placeholder="Vehicle number"
             className="ct-input font-mono uppercase"
