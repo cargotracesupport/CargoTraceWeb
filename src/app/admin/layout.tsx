@@ -1,8 +1,8 @@
 import { requireRole } from "@/lib/auth";
 import AdminNav from "./_nav";
-import { BrandMark, Wordmark, LiveDot, Avatar } from "@/components/icons";
+import { BrandMark, Wordmark, LiveDot } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
-import LogoutButton from "@/components/LogoutButton";
+import ProfileMenu from "@/components/ProfileMenu";
 import NotificationBell from "@/components/NotificationBell";
 
 export default async function AdminLayout({
@@ -29,11 +29,11 @@ export default async function AdminLayout({
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <NotificationBell userId={session.profile.id} />
-            <span className="hidden max-w-[40vw] truncate text-sm text-muted2 sm:inline">
-              {session.profile.full_name}
-            </span>
-            <Avatar name={session.profile.full_name ?? "?"} size={30} />
-            <LogoutButton />
+            <ProfileMenu
+              name={session.profile.full_name}
+              roleLabel="Admin"
+              profileHref="/admin/profile"
+            />
           </div>
         </div>
       </header>

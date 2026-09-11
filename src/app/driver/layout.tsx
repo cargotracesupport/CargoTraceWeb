@@ -3,7 +3,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { BrandMark, Wordmark, LiveDot } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
-import LogoutButton from "@/components/LogoutButton";
+import ProfileMenu from "@/components/ProfileMenu";
 import NotificationBell from "@/components/NotificationBell";
 import VehicleGate from "./_gate";
 
@@ -45,10 +45,11 @@ export default async function DriverLayout({
             <span className="ct-pill bg-primary/10 text-primary">
               <LiveDot /> TX
             </span>
-            <span className="hidden max-w-[40vw] truncate text-sm text-muted2 sm:inline">
-              {session.profile.full_name}
-            </span>
-            <LogoutButton />
+            <ProfileMenu
+              name={session.profile.full_name}
+              roleLabel="Driver"
+              profileHref="/driver/profile"
+            />
           </div>
         </div>
       </header>

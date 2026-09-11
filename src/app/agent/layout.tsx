@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { BrandMark, Wordmark, LiveDot } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
-import LogoutButton from "@/components/LogoutButton";
+import ProfileMenu from "@/components/ProfileMenu";
 import NotificationBell from "@/components/NotificationBell";
 import AgentNav from "./_nav";
 import NewOrderAlert from "./_alert";
@@ -48,10 +48,11 @@ export default async function AgentLayout({
             <span className="ct-pill bg-primary/10 text-primary">
               <LiveDot /> LIVE
             </span>
-            <span className="hidden max-w-[40vw] truncate text-sm text-muted2 sm:inline">
-              {session.profile.full_name}
-            </span>
-            <LogoutButton />
+            <ProfileMenu
+              name={session.profile.full_name}
+              roleLabel="Agent"
+              profileHref="/agent/profile"
+            />
           </div>
         </div>
       </header>
