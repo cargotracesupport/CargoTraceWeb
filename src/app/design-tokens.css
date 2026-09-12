@@ -22,15 +22,15 @@
   --c-accent: 234 88 12;
 
   /* Status hues */
-  --c-green: 0 150 80;
-  --c-amber: 194 102 8;
+  --c-green: 0 120 60;
+  --c-amber: 161 85 0;
   --c-red: 220 38 38;
   --c-blue: 37 99 235;
 
   /* Text */
   --c-text: 16 23 39;
   --c-muted2: 71 85 105;
-  --c-muted: 140 156 176;
+  --c-muted: 90 105 130;
   --c-on-accent: 255 255 255;
 
   --map-bg: #e9eefb;
@@ -74,7 +74,7 @@ html.dark {
 
   --c-text: 226 232 240;
   --c-muted2: 148 163 184;
-  --c-muted: 100 116 139;
+  --c-muted: 130 145 170;
   --c-on-accent: 6 12 24;
 
   --map-bg: #060b16;
