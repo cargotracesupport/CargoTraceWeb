@@ -56,7 +56,7 @@ export async function POST(
   const { data: d } = await supabase
     .from("deliveries")
     .select(
-      "id, status, reference, goods, origin_label, customer_name, customer_phone, dest_lat, driver_id",
+      "id, status, reference, goods, origin_label, customer_name, customer_phone, customer_id, org_id, dest_lat, driver_id",
     )
     .eq("tracking_token", params.token)
     .maybeSingle();
@@ -146,6 +146,35 @@ export async function POST(
       },
       { status: 409 },
     );
+  }
+
+  // Save this drop-off to the customer's address book so it's available on
+  // their next delivery. Dedup within ~50 m (customer_address_nearby); a match
+  // updates the label so the newest text wins, otherwise insert a new row. Any
+  // failure here is non-fatal — the drop-off itself already saved.
+  if (d.customer_id) {
+    const { data: near } = await supabase.rpc("customer_address_nearby", {
+      p_customer: d.customer_id,
+      p_lat: lat,
+      p_lng: lng,
+    });
+    const existing = Array.isArray(near) ? near[0] : null;
+    if (existing?.id) {
+      if (label && label !== existing.label) {
+        await supabase
+          .from("customer_addresses")
+          .update({ label })
+          .eq("id", existing.id);
+      }
+    } else {
+      await supabase.from("customer_addresses").insert({
+        customer_id: d.customer_id,
+        org_id: d.org_id,
+        label,
+        lat,
+        lng,
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

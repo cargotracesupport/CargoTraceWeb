@@ -37,42 +37,40 @@ interface Created {
   sendLink: boolean;
 }
 
-/** A customer's most recent drop-off, reused for repeat deliveries. */
-type SavedDropoff = { lat: number; lng: number; label: string | null };
-type SavedRow = {
-  dest_lat: number | null;
-  dest_lng: number | null;
-  dest_label: string | null;
+/** A saved drop-off address for a customer (customer_addresses row). */
+type SavedAddress = {
+  id: string;
+  lat: number;
+  lng: number;
+  label: string | null;
+  nickname: string | null;
 };
 
-// The most recent drop-off this customer set on a past delivery — linked by
-// customer_id, falling back to phone for deliveries created before the customer
-// master existed. Null when they've never set one.
-async function fetchLastDropoff(c: Customer): Promise<SavedDropoff | null> {
+// All saved addresses for a customer (newest first). Empty array when none.
+async function fetchAddresses(c: Customer): Promise<SavedAddress[]> {
   const supabase = createClient();
-  const pick = (d: SavedRow | null): SavedDropoff | null =>
-    d && d.dest_lat != null && d.dest_lng != null
-      ? { lat: d.dest_lat, lng: d.dest_lng, label: d.dest_label }
-      : null;
-  const byId = await supabase
-    .from("deliveries")
-    .select("dest_lat, dest_lng, dest_label")
-    .eq("customer_id", c.id)
-    .not("dest_lat", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  const fromId = pick(byId.data as SavedRow | null);
-  if (fromId || !c.phone) return fromId;
-  const byPhone = await supabase
-    .from("deliveries")
-    .select("dest_lat, dest_lng, dest_label")
-    .eq("customer_phone", c.phone)
-    .not("dest_lat", "is", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return pick(byPhone.data as SavedRow | null);
+  // Soft-fail if the table is missing/unreadable — the create flow simply
+  // shows "send link" as the only option, matching pre-address-book behaviour.
+  try {
+    const { data, error } = await supabase
+      .from("customer_addresses")
+      .select("id, lat, lng, label, nickname")
+      .eq("customer_id", c.id)
+      .order("created_at", { ascending: false });
+    if (error) return [];
+    return (data ?? []) as SavedAddress[];
+  } catch {
+    return [];
+  }
+}
+
+/** Human name for a saved address: nickname first, else auto label, else coords. */
+function addressName(a: SavedAddress): string {
+  return (
+    a.nickname ||
+    a.label ||
+    `${a.lat.toFixed(5)}, ${a.lng.toFixed(5)}`
+  );
 }
 
 
@@ -178,16 +176,16 @@ export default function NewDeliveryForm({
     delivery?.customer_email ?? "",
   );
 
-  // "Send the customer a tracking link so they set the drop-off." Checked by
-  // default (a new customer must tell us where to deliver). Picking a saved
-  // customer who already set a drop-off on a past delivery unticks it and
-  // reuses that drop-off, so the delivery is ready to assign with no link.
-  const [sendLink, setSendLink] = useState(true);
-  const [lastDropoff, setLastDropoff] = useState<SavedDropoff | null>(null);
+  // Drop-off choice for this delivery: either the id of one of the customer's
+  // saved addresses (skip the link), or the empty string to send them the link
+  // so they can set a fresh one. Defaults to the newest saved address when the
+  // customer has any; otherwise to "send link".
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [pickedAddressId, setPickedAddressId] = useState<string>("");
   const dropoffReq = useRef(0); // drop stale lookups if the agent picks again quickly
 
-  // Picked a saved customer → fill their details and look up their last
-  // drop-off; blank → one-off (unlinked), link on by default.
+  // Picked a saved customer → fill their details and load all their saved
+  // addresses; blank → one-off (unlinked), link mode.
   function applyCustomer(c: Customer | null) {
     const req = ++dropoffReq.current;
     if (c) {
@@ -195,17 +193,22 @@ export default function NewDeliveryForm({
       setCustomerName(c.name ?? "");
       setCustomerPhone(c.phone ?? "");
       setCustomerEmail(c.email ?? "");
-      fetchLastDropoff(c).then((d) => {
+      fetchAddresses(c).then((list) => {
         if (req !== dropoffReq.current) return; // a newer pick superseded this
-        setLastDropoff(d);
-        setSendLink(!d); // known drop-off → reuse it and skip the link
+        setSavedAddresses(list);
+        setPickedAddressId(list[0]?.id ?? ""); // newest by default, else send link
       });
     } else {
       setCustomerId("");
-      setLastDropoff(null);
-      setSendLink(true);
+      setSavedAddresses([]);
+      setPickedAddressId("");
     }
   }
+  // Derived: what the agent chose for THIS delivery.
+  const pickedAddress = pickedAddressId
+    ? savedAddresses.find((a) => a.id === pickedAddressId) ?? null
+    : null;
+  const sendLink = !pickedAddress; // no address picked → send link
   const [driverId, setDriverId] = useState(delivery?.driver_id ?? "");
   const [vehicleId, setVehicleId] = useState(delivery?.vehicle_id ?? "");
   const [deviceId, setDeviceId] = useState(delivery?.device_id ?? "");
@@ -311,11 +314,9 @@ export default function NewDeliveryForm({
       );
       return;
     }
-    // Skipping the link means reusing a saved drop-off — so there must be one.
-    if (!editing && !sendLink && !lastDropoff) {
-      setError(
-        "This customer has no saved drop-off yet — tick “Send the customer a tracking link” so they can set it.",
-      );
+    // Sanity: if agent selected a saved address, it must exist in the loaded set.
+    if (!editing && pickedAddressId && !pickedAddress) {
+      setError("Selected address not found - please pick again.");
       return;
     }
 
@@ -388,13 +389,14 @@ export default function NewDeliveryForm({
     // Unticked "send link" = reuse the customer's saved drop-off, so the
     // delivery is created 'pending' (ready to assign) instead of waiting on
     // the customer. Ticked = leave it for them to set from their link.
-    const saved = !sendLink ? lastDropoff : null; // reuse only when the link is skipped
+    const saved = pickedAddress; // agent picked one -> seed the delivery with it
+    const savedLabel = saved ? saved.nickname || saved.label : null;
     const { data, error: err } = await supabase
       .from("deliveries")
       .insert({
         org_id: orgId,
         ...fields,
-        dest_label: saved?.label ?? null,
+        dest_label: savedLabel,
         dest_lat: saved?.lat ?? null,
         dest_lng: saved?.lng ?? null,
         status: saved ? "pending" : "awaiting_dropoff",
@@ -463,16 +465,7 @@ export default function NewDeliveryForm({
           >
             Send on WhatsApp ({created.phone})
           </a>
-        ) : (
-          <a
-            href={wa}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ct-btn-ghost w-full justify-center"
-          >
-            Send tracking link on WhatsApp (optional)
-          </a>
-        )}
+        ) : null}
 
         <div className="flex flex-col gap-2 sm:flex-row">
           <input
@@ -908,33 +901,86 @@ export default function NewDeliveryForm({
       </fieldset>
       ) : null}
 
-      {/* On create: send the drop-off link, or reuse the customer's saved drop-off. */}
+      {/* On create: pick one of the customer's saved drop-offs, or send them the
+          link so they set a fresh one. New / one-off customers only see the link. */}
       {!editing ? (
-        <div className="flex flex-col gap-2">
-          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border bg-s2 px-3 py-3 text-sm">
-            <input
-              type="checkbox"
-              checked={sendLink}
-              onChange={(e) => setSendLink(e.target.checked)}
-              className="mt-0.5 h-4 w-4"
-            />
-            <span>
-              <span className="font-medium text-text">
-                Send the customer a tracking link to set their drop-off
-              </span>
-              <span className="mt-0.5 block text-xs text-muted2">
-                {lastDropoff
-                  ? `Unticked: reuse their saved drop-off (${lastDropoff.label ?? "saved location"}) and skip the link — the delivery is ready to assign immediately.`
-                  : "New customers need the link to tell us where to deliver."}
-              </span>
-            </span>
-          </label>
+        <fieldset className="ct-card flex flex-col gap-3 p-5">
+          <legend className="px-1 text-sm font-semibold">Drop-off</legend>
+          {savedAddresses.length > 0 ? (
+            <>
+              <p className="text-xs text-muted2">
+                {savedAddresses.length === 1
+                  ? "This customer has 1 saved address — deliver to it, or send them the link for a new one."
+                  : `This customer has ${savedAddresses.length} saved addresses — pick one, or send them the link for a new one.`}
+              </p>
+              <div className="flex flex-col gap-2">
+                {savedAddresses.map((a) => (
+                  <label
+                    key={a.id}
+                    className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-sm ${
+                      pickedAddressId === a.id
+                        ? "border-primary/60 bg-primary/5"
+                        : "border-border bg-s2"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="dropoff_choice"
+                      className="mt-0.5 h-4 w-4"
+                      checked={pickedAddressId === a.id}
+                      onChange={() => setPickedAddressId(a.id)}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium text-text">
+                        {addressName(a)}
+                      </span>
+                      {a.nickname && a.label ? (
+                        <span className="mt-0.5 block truncate text-xs text-muted2">
+                          {a.label}
+                        </span>
+                      ) : null}
+                    </span>
+                  </label>
+                ))}
+                <label
+                  className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 text-sm ${
+                    pickedAddressId === ""
+                      ? "border-primary/60 bg-primary/5"
+                      : "border-border bg-s2"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="dropoff_choice"
+                    className="mt-0.5 h-4 w-4"
+                    checked={pickedAddressId === ""}
+                    onChange={() => setPickedAddressId("")}
+                  />
+                  <span>
+                    <span className="block font-medium text-text">
+                      Send the customer a tracking link (new address)
+                    </span>
+                    <span className="mt-0.5 block text-xs text-muted2">
+                      They set the drop-off from the link, and we save it to
+                      their addresses for next time.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </>
+          ) : (
+            <p className="rounded-lg bg-s2 px-3 py-3 text-sm text-muted2">
+              {customerId
+                ? "This customer has no saved addresses yet — a tracking link will be sent so they can set their drop-off. It’ll be saved for next time."
+                : "New / one-off customer — a tracking link will be sent so they can set their drop-off."}
+            </p>
+          )}
           <p className="rounded-lg bg-s2 px-3 py-2 text-xs text-muted2">
             {sendLink
               ? "No driver is chosen now. Once the customer sets their drop-off, this delivery becomes ready to assign on the dispatch board."
-              : "The delivery will be created ready to assign on the dispatch board, using the customer's saved drop-off."}
+              : "The delivery will be created ready to assign on the dispatch board, using the selected saved address."}
           </p>
-        </div>
+        </fieldset>
       ) : null}
 
       {/* Status — admin sets it directly when editing */}

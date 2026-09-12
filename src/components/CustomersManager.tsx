@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Customer } from "@/lib/types";
-import { Plus, Pencil, Trash, Search, Phone, Contact } from "@/components/icons";
+import { Plus, Pencil, Trash, Search, Phone, Contact, MapPin } from "@/components/icons";
+import CustomerAddressesEditor from "@/components/CustomerAddressesEditor";
 import Spinner from "@/components/Spinner";
 
 /**
@@ -21,6 +22,8 @@ export default function CustomersManager({
   currentUserId: string;
 }) {
   const [items, setItems] = useState<Customer[]>(initial);
+  // Customer whose address book is open in the editor modal.
+  const [addrFor, setAddrFor] = useState<Customer | null>(null);
   const [query, setQuery] = useState("");
   // The record being edited, or a blank draft when adding. null = modal closed.
   const [draft, setDraft] = useState<Partial<Customer> | null>(null);
@@ -178,6 +181,15 @@ export default function CustomersManager({
               </div>
               <button
                 type="button"
+                onClick={() => setAddrFor(c)}
+                aria-label="Saved addresses"
+                title="Saved addresses"
+                className="ct-btn-ghost !px-2 !py-2"
+              >
+                <MapPin className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
                 onClick={() => openEdit(c)}
                 aria-label="Edit customer"
                 className="ct-btn-ghost !px-2 !py-2"
@@ -196,6 +208,14 @@ export default function CustomersManager({
           ))}
         </div>
       )}
+
+      {addrFor ? (
+        <CustomerAddressesEditor
+          customer={addrFor}
+          orgId={orgId}
+          onClose={() => setAddrFor(null)}
+        />
+      ) : null}
 
       {/* add / edit modal */}
       {draft ? (

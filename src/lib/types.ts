@@ -96,6 +96,18 @@ export interface Customer {
   created_at: string;
 }
 
+
+export interface CustomerAddress {
+  id: string;
+  customer_id: string;
+  org_id: string;
+  label: string | null;
+  nickname: string | null;
+  lat: number;
+  lng: number;
+  created_at: string;
+}
+
 export interface Position {
   id: number;
   org_id: string;
