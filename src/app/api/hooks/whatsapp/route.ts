@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { sendDeliveryMessage, type WaEvent, type DeliveryLike } from "@/lib/whatsapp";
+
+// Constant-time compare so a timing side-channel can't recover the secret
+// byte-by-byte.
+function safeEqual(a: string, b: string): boolean {
+  const A = Buffer.from(a);
+  const B = Buffer.from(b);
+  if (A.length !== B.length) return false;
+  return timingSafeEqual(A, B);
+}
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +48,8 @@ interface WebhookPayload {
  */
 export async function POST(req: Request) {
   const secret = process.env.WHATSAPP_WEBHOOK_SECRET || "";
-  if (!secret || req.headers.get("x-webhook-secret") !== secret) {
+  const got = req.headers.get("x-webhook-secret") || "";
+  if (!secret || !safeEqual(got, secret)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
