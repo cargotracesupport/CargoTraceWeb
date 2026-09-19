@@ -152,6 +152,7 @@ async function gate(token: unknown): Promise<NextResponse | null> {
     .from("deliveries")
     .select("id")
     .eq("tracking_token", t)
+    .is("deleted_at", null)
     .maybeSingle();
   if (!data) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const { data: allowed } = await admin.rpc("rate_limit_hit", {

@@ -105,14 +105,16 @@ export default function CustomersManager({
   async function remove(c: Customer) {
     if (
       !window.confirm(
-        `Delete ${c.name ?? c.phone ?? "this customer"}? Their past deliveries are kept.`,
+        `Move ${c.name ?? c.phone ?? "this customer"} to the Trash? Their past deliveries are kept, and you can restore them for 90 days.`,
       )
     )
       return;
     const supabase = createClient();
+    // Soft delete: stamp deleted_at so it drops out of lists but stays
+    // restorable from the admin Trash page for 90 days.
     const { error: err } = await supabase
       .from("customers")
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq("id", c.id);
     if (err) {
       setError(err.message);

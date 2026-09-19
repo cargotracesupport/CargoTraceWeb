@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dashboard, Package, Truck, UserCog, Contact } from "@/components/icons";
+import { Dashboard, Package, Truck, UserCog, Contact, Trash } from "@/components/icons";
 
 const LINKS = [
   { href: "/admin", label: "Dashboard", exact: true, Icon: Dashboard },
@@ -10,6 +10,7 @@ const LINKS = [
   { href: "/admin/customers", label: "Customers", exact: false, Icon: Contact },
   { href: "/admin/agents", label: "Agents", exact: false, Icon: UserCog },
   { href: "/admin/fleet", label: "Fleet", exact: false, Icon: Truck },
+  { href: "/admin/trash", label: "Trash", exact: false, Icon: Trash },
 ];
 
 export default function AdminNav({

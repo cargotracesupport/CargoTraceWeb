@@ -9,7 +9,10 @@ import { Trash } from "@/components/icons";
 type Table = "deliveries" | "vehicles" | "devices";
 
 /**
- * Delete a row (admin only; RLS enforces it) with a confirm prompt, then refresh.
+ * Move a row to the Trash (admin only; RLS enforces it) with a confirm prompt,
+ * then refresh. This is a soft delete: it stamps deleted_at, so the row drops
+ * out of every list but can be restored from the Trash page for 90 days, after
+ * which a daily job removes it for good.
  * For deleting drivers (auth users) use the /api/drivers DELETE endpoint instead.
  */
 export default function DeleteButton({
@@ -27,10 +30,18 @@ export default function DeleteButton({
   const [busy, setBusy] = useState(false);
 
   async function onClick() {
-    if (!window.confirm(confirmText ?? "Delete this? This can't be undone.")) return;
+    if (
+      !window.confirm(
+        confirmText ?? "Move this to the Trash? You can restore it for 90 days.",
+      )
+    )
+      return;
     setBusy(true);
     const supabase = createClient();
-    const { error } = await supabase.from(table).delete().eq("id", id);
+    const { error } = await supabase
+      .from(table)
+      .update({ deleted_at: new Date().toISOString() })
+      .eq("id", id);
     setBusy(false);
     if (error) {
       window.alert(error.message);

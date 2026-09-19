@@ -59,6 +59,7 @@ export async function POST(
       "id, status, reference, goods, origin_label, customer_name, customer_phone, customer_id, org_id, dest_lat, driver_id",
     )
     .eq("tracking_token", params.token)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (!d) {

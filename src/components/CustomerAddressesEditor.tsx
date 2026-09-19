@@ -125,14 +125,15 @@ export default function CustomerAddressesEditor({
     const name = a.nickname || a.label || "this address";
     if (
       !window.confirm(
-        `Delete ${name}? Past deliveries keep their location.`,
+        `Move ${name} to the Trash? Past deliveries keep their location, and an admin can restore it for 90 days.`,
       )
     )
       return;
     const supabase = createClient();
+    // Soft delete: stamp deleted_at (restorable from the admin Trash for 90 days).
     const { error: err } = await supabase
       .from("customer_addresses")
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq("id", a.id);
     if (err) {
       setError(err.message);

@@ -43,6 +43,7 @@ export interface Vehicle {
   width_m: number | null;
   capacity_kg: number | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface Device {
@@ -52,6 +53,7 @@ export interface Device {
   label: string | null;
   vehicle_id: string | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface Delivery {
@@ -84,6 +86,7 @@ export interface Delivery {
   started_at: string | null;
   picked_up_at: string | null;
   delivered_at: string | null;
+  deleted_at: string | null;
 }
 
 export interface Customer {
@@ -94,6 +97,7 @@ export interface Customer {
   phone: string | null;
   email: string | null;
   created_at: string;
+  deleted_at: string | null;
 }
 
 
@@ -106,6 +110,7 @@ export interface CustomerAddress {
   lat: number;
   lng: number;
   created_at: string;
+  deleted_at: string | null;
 }
 
 export interface Position {

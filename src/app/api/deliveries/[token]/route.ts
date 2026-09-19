@@ -32,6 +32,7 @@ export async function GET(
         "vehicle:vehicles(plate, name)",
     )
     .eq("tracking_token", params.token)
+    .is("deleted_at", null)
     .maybeSingle();
 
   if (error || !data) {

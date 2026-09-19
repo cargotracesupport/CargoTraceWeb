@@ -9,3 +9,7 @@ build
 *.tsbuildinfo
 next-env.d.ts
 .vercel
+
+# Local Claude Code session
+.claude/
+CargoTrace-Service-Costs.docx
