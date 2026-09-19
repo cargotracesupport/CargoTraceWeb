@@ -346,23 +346,35 @@ export default function NewDeliveryForm({
     if (editing && delivery) {
       const now = new Date().toISOString();
       const keep = (v: string | null) => v ?? now; // preserve original, else stamp now
+      // Keep driver and status coherent, mirroring assign_delivery_to_driver:
+      // a driver on a not-yet-started delivery means it's "assigned"; removing
+      // the driver from an assigned delivery drops it back to "pending".
+      // Without this a driver could be set while status stayed "pending", and
+      // the driver app (which only shows assigned/en_route) would never see the
+      // trip — it looked unassigned until you edited it a second time.
+      const effStatus: DeliveryStatus =
+        driverId && (status === "pending" || status === "awaiting_dropoff")
+          ? "assigned"
+          : !driverId && status === "assigned"
+            ? "pending"
+            : status;
       // The admin sets the status explicitly. Keep the lifecycle timestamps
       // COHERENT with the chosen status — clear ones that no longer apply so a
       // delivery can't be e.g. "en_route" while still carrying a delivered_at.
-      const patch: Record<string, unknown> = { ...fields, status };
-      if (status === "delivered") {
+      const patch: Record<string, unknown> = { ...fields, status: effStatus };
+      if (effStatus === "delivered") {
         patch.assigned_at = keep(delivery.assigned_at);
         patch.started_at = keep(delivery.started_at);
         patch.delivered_at = keep(delivery.delivered_at);
-      } else if (status === "en_route") {
+      } else if (effStatus === "en_route") {
         patch.assigned_at = keep(delivery.assigned_at);
         patch.started_at = keep(delivery.started_at);
         patch.delivered_at = null;
-      } else if (status === "assigned") {
+      } else if (effStatus === "assigned") {
         patch.assigned_at = keep(delivery.assigned_at);
         patch.started_at = null;
         patch.delivered_at = null;
-      } else if (status === "cancelled") {
+      } else if (effStatus === "cancelled") {
         // Terminal — keep any assigned/started history, but it's not delivered.
         patch.delivered_at = null;
       } else {
@@ -821,6 +833,18 @@ export default function NewDeliveryForm({
                 // Auto-fill the driver's assigned vehicle (same as agent board).
                 const drv = drivers.find((d) => d.id === v);
                 setVehicleId(v ? (drv?.vehicle_id ?? "") : "");
+                // Keep the Status field coherent so the driver actually receives
+                // the trip: picking a driver on a not-yet-started delivery marks
+                // it assigned; clearing it drops back to pending. Still overridable.
+                setStatus((s) =>
+                  v
+                    ? s === "pending" || s === "awaiting_dropoff"
+                      ? "assigned"
+                      : s
+                    : s === "assigned"
+                      ? "pending"
+                      : s,
+                );
               }}
               className={`ct-input ${hasDropoff ? "" : "cursor-not-allowed opacity-60"}`}
             >
