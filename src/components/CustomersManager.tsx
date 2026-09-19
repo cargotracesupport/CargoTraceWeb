@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Customer } from "@/lib/types";
 import { Plus, Pencil, Trash, Search, Phone, Contact, MapPin } from "@/components/icons";
 import CustomerAddressesEditor from "@/components/CustomerAddressesEditor";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import Spinner from "@/components/Spinner";
 
 /**
@@ -32,6 +33,8 @@ export default function CustomersManager({
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [delTarget, setDelTarget] = useState<Customer | null>(null);
+  const [delBusy, setDelBusy] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -103,12 +106,8 @@ export default function CustomersManager({
   }
 
   async function remove(c: Customer) {
-    if (
-      !window.confirm(
-        `Move ${c.name ?? c.phone ?? "this customer"} to the Trash? Their past deliveries are kept, and you can restore them for 90 days.`,
-      )
-    )
-      return;
+    setDelBusy(true);
+    setError(null);
     const supabase = createClient();
     // Soft delete: stamp deleted_at so it drops out of lists but stays
     // restorable from the admin Trash page for 90 days.
@@ -116,10 +115,12 @@ export default function CustomersManager({
       .from("customers")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", c.id);
+    setDelBusy(false);
     if (err) {
       setError(err.message);
       return;
     }
+    setDelTarget(null);
     setItems((prev) => prev.filter((x) => x.id !== c.id));
   }
 
@@ -200,7 +201,10 @@ export default function CustomersManager({
               </button>
               <button
                 type="button"
-                onClick={() => remove(c)}
+                onClick={() => {
+                  setError(null);
+                  setDelTarget(c);
+                }}
                 aria-label="Delete customer"
                 className="ct-btn-ghost !px-2 !py-2 text-red hover:text-red"
               >
@@ -308,6 +312,24 @@ export default function CustomersManager({
           </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={delTarget !== null}
+        title="Move to Trash?"
+        message={
+          error ? (
+            <span className="text-red">{error}</span>
+          ) : (
+            `${delTarget?.name ?? delTarget?.phone ?? "This customer"} moves to the Trash. Their past deliveries are kept, and an admin can restore them for 90 days.`
+          )
+        }
+        confirmLabel="Delete"
+        danger
+        busy={delBusy}
+        icon={<Trash className="h-4 w-4" />}
+        onConfirm={() => delTarget && remove(delTarget)}
+        onCancel={() => setDelTarget(null)}
+      />
     </div>
   );
 }

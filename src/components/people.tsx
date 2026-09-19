@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Profile } from "@/lib/types";
 import Spinner from "@/components/Spinner";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Plus, Trash, Pencil, Truck } from "@/components/icons";
 
 export type VehicleLite = {
@@ -530,10 +531,12 @@ function DeletePersonButton({
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  async function onClick() {
-    if (!window.confirm(confirmText)) return;
+  async function doDelete() {
     setBusy(true);
+    setError(null);
     try {
       const res = await fetch(`${endpoint}?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
@@ -544,31 +547,50 @@ function DeletePersonButton({
           | null;
         throw new Error(j?.error ?? `Failed (${res.status})`);
       }
+      setConfirm(false);
       router.refresh();
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : "Could not delete.");
+      setError(e instanceof Error ? e.message : "Could not delete.");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy}
-      title="Delete"
-      className="ct-btn-ghost px-2 py-1 text-xs hover:border-red hover:text-red disabled:opacity-50"
-    >
-      {busy ? (
-        <Spinner />
-      ) : (
-        <>
-          <Trash className="h-3.5 w-3.5" />
-          Delete
-        </>
-      )}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setError(null);
+          setConfirm(true);
+        }}
+        disabled={busy}
+        title="Delete"
+        className="ct-btn-ghost px-2 py-1 text-xs hover:border-red hover:text-red disabled:opacity-50"
+      >
+        {busy ? (
+          <Spinner />
+        ) : (
+          <>
+            <Trash className="h-3.5 w-3.5" />
+            Delete
+          </>
+        )}
+      </button>
+      <ConfirmDialog
+        open={confirm}
+        title="Delete permanently?"
+        message={
+          error ? <span className="text-red">{error}</span> : confirmText
+        }
+        confirmLabel="Delete"
+        danger
+        busy={busy}
+        icon={<Trash className="h-4 w-4" />}
+        onConfirm={doDelete}
+        onCancel={() => setConfirm(false)}
+      />
+    </>
   );
 }
 

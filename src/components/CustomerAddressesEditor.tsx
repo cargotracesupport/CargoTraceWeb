@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { Customer, CustomerAddress } from "@/lib/types";
 import LocationPicker, { type LatLng } from "@/components/LocationPicker";
 import Spinner from "@/components/Spinner";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Plus, Pencil, Trash, MapPin } from "@/components/icons";
 
 /**
@@ -35,6 +36,8 @@ export default function CustomerAddressesEditor({
   const [label, setLabel] = useState("");
   const [nickname, setNickname] = useState("");
   const [busy, setBusy] = useState(false);
+  const [delTarget, setDelTarget] = useState<CustomerAddress | null>(null);
+  const [delBusy, setDelBusy] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -122,23 +125,20 @@ export default function CustomerAddressesEditor({
   }
 
   async function remove(a: CustomerAddress) {
-    const name = a.nickname || a.label || "this address";
-    if (
-      !window.confirm(
-        `Move ${name} to the Trash? Past deliveries keep their location, and an admin can restore it for 90 days.`,
-      )
-    )
-      return;
+    setDelBusy(true);
+    setError(null);
     const supabase = createClient();
     // Soft delete: stamp deleted_at (restorable from the admin Trash for 90 days).
     const { error: err } = await supabase
       .from("customer_addresses")
       .update({ deleted_at: new Date().toISOString() })
       .eq("id", a.id);
+    setDelBusy(false);
     if (err) {
       setError(err.message);
       return;
     }
+    setDelTarget(null);
     const next = items.filter((x) => x.id !== a.id);
     setItems(next);
     onCountChange?.(next.length);
@@ -221,7 +221,10 @@ export default function CustomerAddressesEditor({
                   </button>
                   <button
                     type="button"
-                    onClick={() => remove(a)}
+                    onClick={() => {
+                      setError(null);
+                      setDelTarget(a);
+                    }}
                     aria-label="Delete address"
                     className="ct-btn-ghost !px-2 !py-2 text-red hover:text-red"
                   >
@@ -337,6 +340,23 @@ export default function CustomerAddressesEditor({
     <>
       {modal}
       {editorModal}
+      <ConfirmDialog
+        open={delTarget !== null}
+        title="Move to Trash?"
+        message={
+          error && delTarget ? (
+            <span className="text-red">{error}</span>
+          ) : (
+            `${delTarget?.nickname || delTarget?.label || "This address"} moves to the Trash. Past deliveries keep their location, and an admin can restore it for 90 days.`
+          )
+        }
+        confirmLabel="Delete"
+        danger
+        busy={delBusy}
+        icon={<Trash className="h-4 w-4" />}
+        onConfirm={() => delTarget && remove(delTarget)}
+        onCancel={() => setDelTarget(null)}
+      />
     </>,
     document.body,
   );

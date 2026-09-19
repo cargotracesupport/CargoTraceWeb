@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Spinner from "@/components/Spinner";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import { Trash, Package, Truck, Contact, MapPin, Check } from "@/components/icons";
 
 /** One trashed row, as returned by the admin_trash() RPC. */
@@ -46,6 +47,7 @@ export default function TrashConsole() {
   const [items, setItems] = useState<TrashItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [purgeTarget, setPurgeTarget] = useState<TrashItem | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -80,12 +82,6 @@ export default function TrashConsole() {
   }
 
   async function purge(it: TrashItem) {
-    if (
-      !window.confirm(
-        `Delete "${it.title ?? "this item"}" forever? This cannot be undone.`,
-      )
-    )
-      return;
     setBusyId(it.id);
     setError(null);
     const supabase = createClient();
@@ -98,6 +94,7 @@ export default function TrashConsole() {
       setError(err.message);
       return;
     }
+    setPurgeTarget(null);
     setItems((prev) => (prev ?? []).filter((x) => x.id !== it.id));
   }
 
@@ -175,7 +172,7 @@ export default function TrashConsole() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => purge(it)}
+                    onClick={() => setPurgeTarget(it)}
                     disabled={busy}
                     className="ct-btn-ghost px-2 py-1 text-xs text-red hover:border-red hover:text-red disabled:opacity-50"
                   >
@@ -188,6 +185,22 @@ export default function TrashConsole() {
           })}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={purgeTarget !== null}
+        title="Delete forever?"
+        message={
+          <>
+            {`"${purgeTarget?.title ?? "This item"}" will be permanently removed. This cannot be undone.`}
+          </>
+        }
+        confirmLabel="Delete forever"
+        danger
+        busy={busyId !== null && busyId === purgeTarget?.id}
+        icon={<Trash className="h-4 w-4" />}
+        onConfirm={() => purgeTarget && purge(purgeTarget)}
+        onCancel={() => setPurgeTarget(null)}
+      />
     </div>
   );
 }

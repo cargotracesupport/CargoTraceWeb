@@ -148,6 +148,12 @@ html.dark .ct-aurora {
     @apply ct-btn border border-border2 bg-s1/50 text-muted2 backdrop-blur
            hover:border-primary/50 hover:text-text;
   }
+  .ct-btn-danger {
+    @apply ct-btn bg-red text-white;
+  }
+  .ct-btn-danger:hover {
+    filter: brightness(1.07);
+  }
 
   /* Pills */
   .ct-pill {
