@@ -12,6 +12,15 @@ function num(n: number): string {
 }
 
 /**
+ * Normalize a vehicle number/plate as it's typed: force uppercase and drop
+ * anything that isn't A–Z or 0–9 (spaces, lowercase, punctuation). Result is a
+ * continuous run of uppercase letters and digits, e.g. "kl 07 ab 1234" → "KL07AB1234".
+ */
+export function normalizePlate(s: string): string {
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+/**
  * Compact specs string, e.g. "4.2 × 1.8 m · 1,200 kg". Missing parts are
  * omitted; returns null when nothing is set (so callers can skip rendering).
  */

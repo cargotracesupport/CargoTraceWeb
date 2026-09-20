@@ -9,7 +9,7 @@ import DeleteButton from "@/components/DeleteButton";
 import { Truck, Pencil } from "@/components/icons";
 import { CardHeader, EmptyState, FormError } from "@/components/people";
 import VehicleDimensionFields from "@/components/VehicleDimensionFields";
-import { formatVehicleSpecs } from "@/lib/vehicle";
+import { formatVehicleSpecs, normalizePlate } from "@/lib/vehicle";
 
 export default function VehiclesManager({
   orgId,
@@ -35,7 +35,7 @@ export default function VehiclesManager({
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const plate = number.trim().toUpperCase();
+    const plate = normalizePlate(number);
     const supabase = createClient();
     const { error: err } = await supabase.from("vehicles").insert({
       org_id: orgId,
@@ -86,7 +86,9 @@ export default function VehiclesManager({
               id="veh_number"
               required
               value={number}
-              onChange={(e) => setNumber(e.target.value.toUpperCase())}
+              inputMode="text"
+              autoCapitalize="characters"
+              onChange={(e) => setNumber(normalizePlate(e.target.value))}
               placeholder="MH 12 AB 1234"
               className="ct-input font-mono uppercase"
             />
@@ -165,7 +167,7 @@ function VehicleRow({ vehicle }: { vehicle: Vehicle }) {
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const plate = number.trim().toUpperCase();
+    const plate = normalizePlate(number);
     const supabase = createClient();
     const { error: err } = await supabase
       .from("vehicles")
