@@ -253,6 +253,28 @@ export async function PATCH(req: Request) {
         { status: 400 },
       );
     }
+
+    // Changing the email or password does NOT revoke the driver's existing
+    // Supabase refresh token — the phone app would stay signed in with the old
+    // credentials. Revoke every session for this user (all devices) so the new
+    // credentials are required to get back in. (admin.signOut needs the user's
+    // JWT, which we don't have here, and service_role can't touch the auth
+    // schema, so this goes through the postgres-owned revoke_user_sessions RPC.)
+    // If it fails, surface it: a silent failure leaves the old session alive,
+    // which is the bug.
+    const { error: revokeErr } = await admin.rpc("revoke_user_sessions", {
+      p_user: id,
+    });
+    if (revokeErr) {
+      console.error("driver session revoke failed:", revokeErr.message);
+      return NextResponse.json(
+        {
+          error:
+            "Login updated, but signing the driver out of their devices failed — they may still be logged in. Please try again.",
+        },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({ ok: true });

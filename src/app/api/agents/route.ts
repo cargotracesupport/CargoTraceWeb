@@ -168,6 +168,27 @@ export async function PATCH(req: Request) {
         { status: 400 },
       );
     }
+
+    // Changing the email or password does NOT revoke the agent's existing
+    // Supabase refresh tokens on its own, so any device they're signed in on
+    // stays logged in with the old credentials. Revoke every session for this
+    // user (all devices) via the postgres-owned revoke_user_sessions RPC
+    // (admin.signOut needs the user's JWT, and service_role can't touch the
+    // auth schema directly). Fail loudly — a silent failure leaves the old
+    // session alive.
+    const { error: revokeErr } = await admin.rpc("revoke_user_sessions", {
+      p_user: id,
+    });
+    if (revokeErr) {
+      console.error("agent session revoke failed:", revokeErr.message);
+      return NextResponse.json(
+        {
+          error:
+            "Login updated, but signing the agent out of their devices failed — they may still be logged in. Please try again.",
+        },
+        { status: 500 },
+      );
+    }
   }
 
   return NextResponse.json({ ok: true });
