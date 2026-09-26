@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isPwned, PWNED_MESSAGE } from "@/lib/password";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,9 @@ export async function POST(req: Request) {
       { error: "fullName, email and password (min 6) required" },
       { status: 400 },
     );
+  }
+  if (await isPwned(password)) {
+    return NextResponse.json({ error: PWNED_MESSAGE }, { status: 400 });
   }
   if (fullName.length > 120 || email.length > 200) {
     return NextResponse.json({ error: "name or email too long" }, { status: 400 });
@@ -123,6 +127,9 @@ export async function PATCH(req: Request) {
       { error: "password must be at least 6 characters" },
       { status: 400 },
     );
+  }
+  if (password && (await isPwned(password))) {
+    return NextResponse.json({ error: PWNED_MESSAGE }, { status: 400 });
   }
 
   const admin = createAdminClient();
