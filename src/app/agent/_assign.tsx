@@ -142,8 +142,9 @@ export default function AssignConsole({
     );
   }, [rows, query]);
 
-  // New flow: no driver until the customer sets a drop-off.
-  //  • awaiting_dropoff → waiting on the customer (not assignable yet)
+  // New flow: the customer sets the drop-off, then a driver takes it.
+  //  • awaiting_dropoff → waiting on the customer (a driver may already be
+  //    pre-assigned from the create form; they get it once the drop-off is set)
   //  • pending w/ drop-off + no driver → READY to assign (grouped by route)
   const waitingDropoff = filtered.filter(
     (r) => r.status === "awaiting_dropoff",
@@ -156,7 +157,8 @@ export default function AssignConsole({
       r.dest_lng != null,
   );
   const active = filtered.filter(
-    (r) => r.driver_id && !DONE.has(r.status),
+    (r) =>
+      r.driver_id && r.status !== "awaiting_dropoff" && !DONE.has(r.status),
   );
   const done = filtered.filter((r) => DONE.has(r.status));
 
@@ -317,7 +319,7 @@ export default function AssignConsole({
             mode={groupMode}
             grouping={grouping}
           />
-          <WaitingForDropoff deliveries={waitingDropoff} />
+          <WaitingForDropoff deliveries={waitingDropoff} driverName={driverName} />
           {routeGroups.length === 0 && waitingDropoff.length === 0 ? (
             <Section title="Needs a driver" count={0} empty="Nothing waiting to assign — every drop-off is set and assigned.">
               {null}
@@ -341,7 +343,7 @@ export default function AssignConsole({
             mode={groupMode}
             grouping={grouping}
           />
-          <WaitingForDropoff deliveries={waitingDropoff} />
+          <WaitingForDropoff deliveries={waitingDropoff} driverName={driverName} />
           <Section
             title="Assigned & en route"
             count={active.length}
@@ -565,7 +567,13 @@ function RouteGroupCard({
 
 /* ── Waiting for the customer to set their drop-off ─────────────────────── */
 
-function WaitingForDropoff({ deliveries }: { deliveries: Delivery[] }) {
+function WaitingForDropoff({
+  deliveries,
+  driverName,
+}: {
+  deliveries: Delivery[];
+  driverName: (id: string | null) => string | null;
+}) {
   if (deliveries.length === 0) return null;
   return (
     <Section title="Waiting for drop-off" count={deliveries.length}>
@@ -590,8 +598,10 @@ function WaitingForDropoff({ deliveries }: { deliveries: Delivery[] }) {
               {d.goods ?? "Delivery"}
             </p>
             <p className="mt-1 text-xs text-muted2">
-              {d.customer_name ?? "Customer"} · waiting for them to set the
-              drop-off before you can assign a driver.
+              {d.customer_name ?? "Customer"} ·{" "}
+              {d.driver_id
+                ? `waiting for them to set the drop-off. ${driverName(d.driver_id)} is pre-assigned and gets it as soon as they do.`
+                : "waiting for them to set the drop-off before you can assign a driver."}
             </p>
           </div>
         </div>

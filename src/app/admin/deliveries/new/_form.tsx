@@ -35,6 +35,8 @@ interface Created {
   reference: string;
   /** Whether the agent chose to send the customer the drop-off link. */
   sendLink: boolean;
+  /** Name of the driver chosen on create, if any. */
+  driverName: string | null;
 }
 
 /** A saved drop-off address for a customer (customer_addresses row). */
@@ -302,15 +304,16 @@ export default function NewDeliveryForm({
       }
     }
 
-    // A driver can only be assigned once the delivery has a drop-off (the
-    // customer normally sets it). Also block moving the status forward without
-    // one, so a delivery can't be "assigned/en route/delivered" with no drop-off.
+    // A driver may be chosen before the drop-off exists (pre-assigned: the
+    // delivery stays "awaiting drop-off" and goes to the driver once the
+    // customer sets it). But the status can't move forward without one, so a
+    // delivery can't be "assigned/en route/delivered" with no drop-off.
     const hasDropoffCoords = dLat != null && dLng != null;
     const movingForward =
       editing && ["assigned", "en_route", "delivered"].includes(status);
-    if ((driverId || movingForward) && !hasDropoffCoords) {
+    if (movingForward && !hasDropoffCoords) {
       setError(
-        "Set the drop-off location first — a driver can only be assigned once the delivery has a drop-off.",
+        "Set the drop-off location first — a delivery can't be assigned, en route or delivered without one.",
       );
       return;
     }
@@ -320,10 +323,10 @@ export default function NewDeliveryForm({
       return;
     }
 
-    // On create every field is required. (Map fields and the customer picker
-    // aren't plain <input>s, so the browser's `required` can't cover them —
-    // validate here.) Reference is auto-generated, and the drop-off is set by
-    // the customer or a saved address, so those aren't entered here.
+    // On create the starred fields are required. (Map fields and the customer
+    // picker aren't plain <input>s, so the browser's `required` can't cover
+    // them — validate here.) Reference is auto-generated, the drop-off is set
+    // by the customer or a saved address, and email and driver are optional.
     if (!editing) {
       let missing: string | null = null;
       if (!goods.trim()) missing = "Goods is required.";
@@ -333,7 +336,6 @@ export default function NewDeliveryForm({
       else if (!customerName.trim()) missing = "Customer name is required.";
       else if (!customerPhone.trim())
         missing = "Customer mobile number is required.";
-      else if (!customerEmail.trim()) missing = "Customer email is required.";
       if (missing) {
         setError(missing);
         return;
@@ -366,18 +368,24 @@ export default function NewDeliveryForm({
     if (editing && delivery) {
       const now = new Date().toISOString();
       const keep = (v: string | null) => v ?? now; // preserve original, else stamp now
-      // Keep driver and status coherent, mirroring assign_delivery_to_driver:
-      // a driver on a not-yet-started delivery means it's "assigned"; removing
-      // the driver from an assigned delivery drops it back to "pending".
+      // Keep driver, drop-off and status coherent for a not-yet-started
+      // delivery: no drop-off means "awaiting drop-off" (a driver may be
+      // pre-assigned and gets the trip once the customer sets it); a drop-off
+      // with a driver means "assigned"; a drop-off without one means "pending".
       // Without this a driver could be set while status stayed "pending", and
       // the driver app (which only shows assigned/en_route) would never see the
       // trip — it looked unassigned until you edited it a second time.
-      const effStatus: DeliveryStatus =
-        driverId && (status === "pending" || status === "awaiting_dropoff")
-          ? "assigned"
-          : !driverId && status === "assigned"
-            ? "pending"
-            : status;
+      const notStarted =
+        status === "awaiting_dropoff" ||
+        status === "pending" ||
+        (status === "assigned" && !driverId);
+      const effStatus: DeliveryStatus = notStarted
+        ? !hasDropoffCoords
+          ? "awaiting_dropoff"
+          : driverId
+            ? "assigned"
+            : "pending"
+        : status;
       // The admin sets the status explicitly. Keep the lifecycle timestamps
       // COHERENT with the chosen status — clear ones that no longer apply so a
       // delivery can't be e.g. "en_route" while still carrying a delivered_at.
@@ -418,11 +426,18 @@ export default function NewDeliveryForm({
     }
 
     // ── Create ────────────────────────────────────────────────────
-    // Unticked "send link" = reuse the customer's saved drop-off, so the
-    // delivery is created 'pending' (ready to assign) instead of waiting on
-    // the customer. Ticked = leave it for them to set from their link.
+    // A saved drop-off picked = the delivery doesn't wait on the customer: it
+    // is created 'assigned' with a driver, or 'pending' (ready to assign)
+    // without one. Otherwise it waits for the customer to set the drop-off
+    // from their link; a driver chosen now is pre-assigned and the drop-off
+    // endpoint moves it to 'assigned' once the customer sets it.
     const saved = pickedAddress; // agent picked one -> seed the delivery with it
     const savedLabel = saved ? saved.nickname || saved.label : null;
+    const createStatus: DeliveryStatus = !saved
+      ? "awaiting_dropoff"
+      : driverId
+        ? "assigned"
+        : "pending";
     const { data, error: err } = await supabase
       .from("deliveries")
       .insert({
@@ -434,7 +449,7 @@ export default function NewDeliveryForm({
         dest_label: savedLabel,
         dest_lat: saved?.lat ?? null,
         dest_lng: saved?.lng ?? null,
-        status: saved ? "pending" : "awaiting_dropoff",
+        status: createStatus,
         assigned_at: driverId ? new Date().toISOString() : null,
       })
       .select("tracking_token, reference")
@@ -456,6 +471,9 @@ export default function NewDeliveryForm({
       name: customerName.trim(),
       reference: (data.reference as string | null) ?? reference.trim(),
       sendLink,
+      driverName: driverId
+        ? (drivers.find((d) => d.id === driverId)?.full_name ?? "the driver")
+        : null,
     });
   }
 
@@ -485,8 +503,12 @@ export default function NewDeliveryForm({
           <div className="text-2xl font-semibold text-green">Delivery created</div>
           <p className="mt-1 text-sm text-muted2">
             {created.sendLink
-              ? "Send the customer their link so they can set the drop-off location."
-              : "Created with the customer's saved drop-off — it's ready to assign a driver. No link needed."}
+              ? created.driverName
+                ? `Send the customer their link so they can set the drop-off location. ${created.driverName} gets the trip as soon as they do.`
+                : "Send the customer their link so they can set the drop-off location."
+              : created.driverName
+                ? `Created with the customer's saved drop-off and assigned to ${created.driverName}. No link needed.`
+                : "Created with the customer's saved drop-off — it's ready to assign a driver. No link needed."}
           </p>
         </div>
 
@@ -577,8 +599,11 @@ export default function NewDeliveryForm({
     );
   }
 
-  // A driver can only be assigned once a drop-off exists — gate the picker on it.
-  const hasDropoff = parsePoint(destLat, destLng) != null;
+  // Whether the delivery will have a drop-off: on edit the coordinates, on
+  // create a picked saved address. Without one a chosen driver is pre-assigned.
+  const hasDropoff = editing
+    ? parsePoint(destLat, destLng) != null
+    : pickedAddress != null;
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -819,7 +844,7 @@ export default function NewDeliveryForm({
           </div>
           <div>
             <label className="ct-label" htmlFor="customer_phone">
-              Mobile number *
+              Mobile number<span className="text-red"> *</span>
             </label>
             <input
               id="customer_phone"
@@ -837,12 +862,11 @@ export default function NewDeliveryForm({
           </div>
           <div>
             <label className="ct-label" htmlFor="customer_email">
-              Email{!editing ? <span className="text-red"> *</span> : null}
+              Email <span className="font-normal text-muted">(optional)</span>
             </label>
             <input
               id="customer_email"
               type="email"
-              required={!editing}
               value={customerEmail}
               onChange={(e) => setCustomerEmail(e.target.value)}
               placeholder="jane@example.com"
@@ -851,123 +875,6 @@ export default function NewDeliveryForm({
           </div>
         </div>
       </fieldset>
-
-      {/* Assignment — edit-only. New deliveries get their driver AFTER the
-          customer sets the drop-off, assigned from the dispatch board. */}
-      {editing ? (
-      <fieldset className="ct-card flex flex-col gap-4 p-5">
-        <legend className="px-1 text-sm font-semibold">Assignment</legend>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div>
-            <label className="ct-label" htmlFor="driver">
-              Driver
-            </label>
-            <select
-              id="driver"
-              value={driverId}
-              disabled={!hasDropoff}
-              title={
-                hasDropoff
-                  ? "Assign a driver"
-                  : "Set the drop-off location first — a driver can only be assigned once the delivery has a drop-off."
-              }
-              onChange={(e) => {
-                const v = e.target.value;
-                setDriverId(v);
-                // Auto-fill the driver's assigned vehicle (same as agent board).
-                const drv = drivers.find((d) => d.id === v);
-                setVehicleId(v ? (drv?.vehicle_id ?? "") : "");
-                // Keep the Status field coherent so the driver actually receives
-                // the trip: picking a driver on a not-yet-started delivery marks
-                // it assigned; clearing it drops back to pending. Still overridable.
-                setStatus((s) =>
-                  v
-                    ? s === "pending" || s === "awaiting_dropoff"
-                      ? "assigned"
-                      : s
-                    : s === "assigned"
-                      ? "pending"
-                      : s,
-                );
-              }}
-              className={`ct-input ${hasDropoff ? "" : "cursor-not-allowed opacity-60"}`}
-            >
-              <option value="">Unassigned</option>
-              {drivers.map((d) => {
-                const b = busyByDriver.get(d.id);
-                const isMe = delivery && b?.deliveryId === delivery.id;
-                const busy = b && !isMe;
-                const suffix = busy
-                  ? b.status === "en_route"
-                    ? ` — On the road · ${b.reference ?? "active trip"}`
-                    : ` — On ${b.reference ?? "active trip"}`
-                  : " — Available";
-                return (
-                  <option key={d.id} value={d.id}>
-                    {(d.full_name ?? d.id) + suffix}
-                  </option>
-                );
-              })}
-            </select>
-            <p className="mt-1 text-xs text-muted">
-              {hasDropoff
-                ? "Available drivers are free for a new trip; busy drivers are currently assigned or on the road."
-                : "Set the drop-off location above first — a driver can only be assigned once the delivery has a drop-off."}
-            </p>
-          </div>
-          <div>
-            <label className="ct-label" htmlFor="vehicle">
-              Vehicle
-            </label>
-            <select
-              id="vehicle"
-              value={vehicleId}
-              onChange={editing ? (e) => setVehicleId(e.target.value) : () => {}}
-              disabled={!editing}
-              title={
-                editing
-                  ? "Vehicle for this delivery"
-                  : "Vehicle is set from the driver — edit it on the driver"
-              }
-              className={`ct-input ${editing ? "" : "cursor-not-allowed"}`}
-            >
-              <option value="">
-                {editing ? "Unassigned" : "— vehicle from driver —"}
-              </option>
-              {vehicles.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name}
-                  {v.plate ? ` · ${v.plate}` : ""}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-muted">
-              {editing
-                ? "Auto-filled from the driver; change it here if needed."
-                : "Set from the chosen driver. To change it, edit the driver."}
-            </p>
-          </div>
-          <div>
-            <label className="ct-label" htmlFor="device">
-              Device
-            </label>
-            <select
-              id="device"
-              value={deviceId}
-              onChange={(e) => setDeviceId(e.target.value)}
-              className="ct-input"
-            >
-              <option value="">None</option>
-              {devices.map((dev) => (
-                <option key={dev.id} value={dev.id}>
-                  {dev.label ?? dev.hardware_id}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </fieldset>
-      ) : null}
 
       {/* On create: pick one of the customer's saved drop-offs, or send them the
           link so they set a fresh one. New / one-off customers only see the link. */}
@@ -1045,11 +952,124 @@ export default function NewDeliveryForm({
           )}
           <p className="rounded-lg bg-s2 px-3 py-2 text-xs text-muted2">
             {sendLink
-              ? "No driver is chosen now. Once the customer sets their drop-off, this delivery becomes ready to assign on the dispatch board."
-              : "The delivery will be created ready to assign on the dispatch board, using the selected saved address."}
+              ? "The delivery waits for the customer to set their drop-off. A driver chosen below gets it as soon as they do."
+              : "The delivery uses the selected saved address, so a driver chosen below gets it right away."}
           </p>
         </fieldset>
       ) : null}
+
+      {/* Assignment — optional on create and editable later. A driver chosen
+          before the drop-off exists is pre-assigned: they get the trip as soon
+          as the customer sets it. */}
+      <fieldset className="ct-card flex flex-col gap-4 p-5">
+        <legend className="px-1 text-sm font-semibold">
+          Assignment
+          {!editing ? (
+            <span className="font-normal text-muted"> (optional)</span>
+          ) : null}
+        </legend>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div>
+            <label className="ct-label" htmlFor="driver">
+              Driver
+            </label>
+            <select
+              id="driver"
+              value={driverId}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDriverId(v);
+                // Auto-fill the driver's assigned vehicle (same as agent board).
+                const drv = drivers.find((d) => d.id === v);
+                setVehicleId(v ? (drv?.vehicle_id ?? "") : "");
+                // Keep the Status field coherent so the driver actually receives
+                // the trip: picking a driver on a not-yet-started delivery with a
+                // drop-off marks it assigned; clearing it drops back to pending.
+                // Without a drop-off it stays awaiting drop-off (pre-assigned).
+                // Still overridable.
+                setStatus((s) =>
+                  v
+                    ? (s === "pending" || s === "awaiting_dropoff") && hasDropoff
+                      ? "assigned"
+                      : s
+                    : s === "assigned"
+                      ? hasDropoff
+                        ? "pending"
+                        : "awaiting_dropoff"
+                      : s,
+                );
+              }}
+              className="ct-input"
+            >
+              <option value="">Unassigned</option>
+              {drivers.map((d) => {
+                const b = busyByDriver.get(d.id);
+                const isMe = delivery && b?.deliveryId === delivery.id;
+                const busy = b && !isMe;
+                const suffix = busy
+                  ? b.status === "en_route"
+                    ? ` — On the road · ${b.reference ?? "active trip"}`
+                    : ` — On ${b.reference ?? "active trip"}`
+                  : " — Available";
+                return (
+                  <option key={d.id} value={d.id}>
+                    {(d.full_name ?? d.id) + suffix}
+                  </option>
+                );
+              })}
+            </select>
+            <p className="mt-1 text-xs text-muted">
+              {!driverId
+                ? editing
+                  ? "Available drivers are free for a new trip; busy drivers are currently assigned or on the road."
+                  : "Leave unassigned to pick a driver later from the dispatch board."
+                : hasDropoff
+                  ? "The driver gets this trip right away."
+                  : "Pre-assigned — the driver gets this trip as soon as the customer sets the drop-off."}
+            </p>
+          </div>
+          <div>
+            <label className="ct-label" htmlFor="vehicle">
+              Vehicle
+            </label>
+            <select
+              id="vehicle"
+              value={vehicleId}
+              onChange={(e) => setVehicleId(e.target.value)}
+              className="ct-input"
+            >
+              <option value="">Unassigned</option>
+              {vehicles.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                  {v.plate ? ` · ${v.plate}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted">
+              Auto-filled from the driver; change it here if needed.
+            </p>
+          </div>
+          <div>
+            <label className="ct-label" htmlFor="device">
+              Device
+            </label>
+            <select
+              id="device"
+              value={deviceId}
+              onChange={(e) => setDeviceId(e.target.value)}
+              className="ct-input"
+            >
+              <option value="">None</option>
+              {devices.map((dev) => (
+                <option key={dev.id} value={dev.id}>
+                  {dev.label ?? dev.hardware_id}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </fieldset>
 
       {/* Status — admin sets it directly when editing */}
       {editing ? (
