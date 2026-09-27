@@ -129,10 +129,10 @@ export default function CustomerAddressesEditor({
     setError(null);
     const supabase = createClient();
     // Soft delete: stamp deleted_at (restorable from the admin Trash for 90 days).
-    const { error: err } = await supabase
-      .from("customer_addresses")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", a.id);
+    const { error: err } = await supabase.rpc("soft_delete_row", {
+      p_table: "customer_addresses",
+      p_id: a.id,
+    });
     setDelBusy(false);
     if (err) {
       setError(err.message);

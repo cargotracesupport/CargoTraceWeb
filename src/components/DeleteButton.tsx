@@ -36,10 +36,12 @@ export default function DeleteButton({
     setBusy(true);
     setError(null);
     const supabase = createClient();
-    const { error } = await supabase
-      .from(table)
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
+    // Goes through a SECURITY DEFINER function: a plain UPDATE of deleted_at is
+    // rejected by the "hide deleted rows" RLS policy (migration 0026).
+    const { error } = await supabase.rpc("soft_delete_row", {
+      p_table: table,
+      p_id: id,
+    });
     setBusy(false);
     if (error) {
       setError(error.message);

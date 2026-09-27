@@ -69,10 +69,10 @@ export default function TrashConsole() {
     setBusyId(it.id);
     setError(null);
     const supabase = createClient();
-    const { error: err } = await supabase
-      .from(KIND[it.kind].table)
-      .update({ deleted_at: null })
-      .eq("id", it.id);
+    const { error: err } = await supabase.rpc("restore_row", {
+      p_table: KIND[it.kind].table,
+      p_id: it.id,
+    });
     setBusyId(null);
     if (err) {
       setError(err.message);
@@ -85,10 +85,10 @@ export default function TrashConsole() {
     setBusyId(it.id);
     setError(null);
     const supabase = createClient();
-    const { error: err } = await supabase
-      .from(KIND[it.kind].table)
-      .delete()
-      .eq("id", it.id);
+    const { error: err } = await supabase.rpc("purge_row", {
+      p_table: KIND[it.kind].table,
+      p_id: it.id,
+    });
     setBusyId(null);
     if (err) {
       setError(err.message);

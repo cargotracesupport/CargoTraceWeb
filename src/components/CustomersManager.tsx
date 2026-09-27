@@ -111,10 +111,10 @@ export default function CustomersManager({
     const supabase = createClient();
     // Soft delete: stamp deleted_at so it drops out of lists but stays
     // restorable from the admin Trash page for 90 days.
-    const { error: err } = await supabase
-      .from("customers")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", c.id);
+    const { error: err } = await supabase.rpc("soft_delete_row", {
+      p_table: "customers",
+      p_id: c.id,
+    });
     setDelBusy(false);
     if (err) {
       setError(err.message);
