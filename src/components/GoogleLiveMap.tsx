@@ -120,6 +120,8 @@ export default function GoogleLiveMap({
           obj.setIcon(icon);
           obj.__iconKey = key;
         }
+        // The truck's hover label carries its fix age ("last seen 14 min ago").
+        if (obj.getTitle() !== (m.label ?? "")) obj.setTitle(m.label ?? "");
       }
     }
     for (const [id, obj] of markerObjs.current) {

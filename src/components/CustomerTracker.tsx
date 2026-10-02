@@ -6,35 +6,28 @@ import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import DropoffSetter from "@/components/DropoffSetter";
 import { BrandMark, Wordmark, Check, MapPin, Flag, Truck, Phone, Avatar, Home } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
-import { estimateEtaMinutes, formatEta } from "@/lib/eta";
+import { formatEta } from "@/lib/eta";
 import { roadRouteThrough } from "@/lib/route";
 import type { DeliveryStatus } from "@/lib/types";
+import type { PublicDelivery } from "@/lib/tracking";
 
-// Mirrors the GET /api/deliveries/{token} contract — the public delivery shape.
-export interface PublicDelivery {
-  reference: string;
-  goods: string;
-  status: string;
-  origin_label: string;
-  origin_lat: number | null;
-  origin_lng: number | null;
-  dest_label: string;
-  dest_lat: number | null;
-  dest_lng: number | null;
-  customer_name: string | null;
-  last_lat: number | null;
-  last_lng: number | null;
-  last_speed: number | null;
-  last_position_at: string | null;
-  delivered_at: string | null;
-  picked_up_at: string | null;
-  driver?: { full_name: string | null; phone: string | null } | null;
-  vehicle?: { plate: string | null; name: string | null } | null;
+export type { PublicDelivery };
+
+// Customers can't use Supabase realtime (they have no session and match no
+// RLS policy), so we poll the public endpoint. The driver app reports at most
+// every 15 s, so polling faster only adds load.
+const POLL_MS = 15000;
+
+/** "just now", "4 min ago", "2h ago" from a server-computed age in seconds. */
+function ageLabel(seconds: number | null): string {
+  if (seconds == null) return "";
+  const mins = Math.floor(seconds / 60);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }
-
-// Customers can't use Supabase realtime (anon, RLS-gated), so we poll. Keep it
-// snappy so the driver's live position feels real-time.
-const POLL_MS = 3000;
 
 function fmtTime(iso: string | null): string {
   if (!iso) return "";
@@ -77,7 +70,7 @@ export default function CustomerTracker({
 
   // Customer-facing update feed (polled from the public notifications endpoint).
   const [updates, setUpdates] = useState<
-    Array<{ id: string; title: string; body: string | null; created_at: string }>
+    Array<{ type: string; title: string; body: string | null; created_at: string }>
   >([]);
   useEffect(() => {
     let active = true;
@@ -190,6 +183,9 @@ export default function CustomerTracker({
   const isCancelled = status === "cancelled";
 
   const hasPosition = delivery.last_lat != null && delivery.last_lng != null;
+  // A position older than a few minutes is shown as "last seen", never live.
+  const live = hasPosition && delivery.position_live;
+  const seen = ageLabel(delivery.position_age_s);
   const needsDropoff =
     !isDelivered &&
     status !== "cancelled" &&
@@ -212,7 +208,7 @@ export default function CustomerTracker({
       id: "origin",
       lat: delivery.origin_lat,
       lng: delivery.origin_lng,
-      label: delivery.origin_label,
+      label: delivery.origin_label ?? "Pickup",
       kind: "origin",
     });
   }
@@ -221,7 +217,7 @@ export default function CustomerTracker({
       id: "dest",
       lat: delivery.dest_lat,
       lng: delivery.dest_lng,
-      label: delivery.dest_label,
+      label: delivery.dest_label ?? "Drop-off",
       kind: "dest",
     });
   }
@@ -230,8 +226,10 @@ export default function CustomerTracker({
       id: "truck",
       lat: delivery.last_lat as number,
       lng: delivery.last_lng as number,
-      label: "Your delivery",
+      label: live ? "Your delivery" : `Last seen ${seen}`,
       kind: "truck",
+      // Grey marker for a stale fix (the staff maps' "offline" style).
+      state: live ? undefined : "offline",
     });
   }
 
@@ -282,31 +280,7 @@ export default function CustomerTracker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [headingToPickup, truckKey]);
 
-  const truckPoint = hasPosition
-    ? { lat: delivery.last_lat as number, lng: delivery.last_lng as number }
-    : null;
-  const destPoint =
-    delivery.dest_lat != null && delivery.dest_lng != null
-      ? { lat: delivery.dest_lat, lng: delivery.dest_lng }
-      : null;
-  // ETA to the customer. While heading to pickup it's the sum of both legs
-  // (driver → pickup, pickup → drop-off) so "arriving in" stays honest.
-  const etaMin =
-    !isDelivered && truckPoint
-      ? headingToPickup && originPoint
-        ? (() => {
-            const toPickup = estimateEtaMinutes(
-              truckPoint,
-              originPoint,
-              delivery.last_speed,
-            );
-            const onward = destPoint
-              ? estimateEtaMinutes(originPoint, destPoint, null)
-              : 0;
-            return toPickup == null ? null : toPickup + (onward ?? 0);
-          })()
-        : estimateEtaMinutes(truckPoint, destPoint, delivery.last_speed)
-      : null;
+  const etaMin = isDelivered ? null : delivery.eta_minutes;
 
   return (
     <main className="min-h-dvh text-text flex flex-col">
@@ -356,9 +330,11 @@ export default function CustomerTracker({
                 ? "Delivery cancelled"
                 : isDelivered
                   ? "Delivery complete"
-                  : hasPosition
+                  : live
                     ? "Arriving in"
-                    : "Preparing your delivery"}
+                    : hasPosition
+                      ? "Driver's last known location"
+                      : "Preparing your delivery"}
           </p>
           {needsDropoff ? (
             <div className="mt-1 text-2xl font-bold tracking-tight">
@@ -372,14 +348,22 @@ export default function CustomerTracker({
             <div className="mt-1 flex items-center gap-2 text-4xl font-extrabold tracking-tight">
               <Check className="h-8 w-8" strokeWidth={3} /> Delivered
             </div>
-          ) : hasPosition ? (
+          ) : live ? (
             <div className="mt-1 flex items-end gap-3">
               <span className="font-mono text-5xl font-bold leading-none">
                 {formatEta(etaMin)}
               </span>
-              <span className="pb-1 text-sm text-white/75">
-                updated {fmtTime(delivery.last_position_at) || "—"}
-              </span>
+              <span className="pb-1 text-sm text-white/75">updated {seen}</span>
+            </div>
+          ) : hasPosition ? (
+            <div className="mt-1">
+              <div className="text-3xl font-bold tracking-tight">
+                Updated {seen}
+              </div>
+              <p className="mt-1 text-sm text-white/75">
+                Live location is paused. It updates again when the driver&rsquo;s
+                phone reconnects.
+              </p>
             </div>
           ) : (
             <div className="mt-1 text-2xl font-bold tracking-tight">
@@ -578,6 +562,11 @@ export default function CustomerTracker({
               <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-red/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-red">
                 Delivery cancelled
               </p>
+            ) : hasPosition && !live ? (
+              <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-s3 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted2">
+                <span className="inline-flex h-2 w-2 rounded-full bg-muted" />
+                Location last updated {seen}
+              </p>
             ) : hasPosition ? (
               <p
                 className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
@@ -593,7 +582,7 @@ export default function CustomerTracker({
                   />
                 </span>
                 {headingToPickup ? "On the way to pickup" : "On the way to you"} ·
-                updated {fmtTime(delivery.last_position_at) || "—"}
+                updated {seen}
               </p>
             ) : (
               <p className="mt-3 text-xs text-muted2">
@@ -610,8 +599,8 @@ export default function CustomerTracker({
               Updates
             </div>
             <ul className="mt-3 flex flex-col gap-3">
-              {updates.slice(0, 6).map((u) => (
-                <li key={u.id} className="flex gap-3">
+              {updates.slice(0, 6).map((u, i) => (
+                <li key={`${u.created_at}-${i}`} className="flex gap-3">
                   <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-text">{u.title}</p>

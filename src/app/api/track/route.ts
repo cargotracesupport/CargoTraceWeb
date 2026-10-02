@@ -14,7 +14,7 @@ const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
  * the caller is allowed to post for this delivery: the assigned driver, an admin
  * in the delivery's org, or the agent who owns it (the admin "Simulate" tool).
  *
- * POST { deliveryId, lat, lng, speed?, heading?, recordedAt? }
+ * POST { deliveryId, lat, lng, speed? (km/h), heading?, recordedAt? }
  *
  * NOTE: dedicated GPS hardware (no session cookie) is not in use yet. When it
  * is added, give it a separate path authenticated by a per-device shared secret
@@ -49,13 +49,17 @@ export async function POST(req: Request) {
   }
 
   // speed/heading are optional; reject non-finite values rather than writing NaN.
+  // This endpoint takes speed in km/h (what the web driver screen and the
+  // Simulate tool send), but the database stores METRES PER SECOND — the unit
+  // the driver mobile app writes to positions.speed / deliveries.last_speed
+  // directly. Convert here so every row uses the same unit.
   let speed: number | null = null;
   if (body.speed != null) {
     const s = Number(body.speed);
     if (!Number.isFinite(s) || s < 0) {
       return NextResponse.json({ error: "invalid speed" }, { status: 400 });
     }
-    speed = s;
+    speed = s / 3.6;
   }
   let heading: number | null = null;
   if (body.heading != null) {

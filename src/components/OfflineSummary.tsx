@@ -6,9 +6,11 @@ import { isOfflineMidTrip, lastSeenMinutes } from "@/lib/presence";
 type Row = Delivery & { driver?: { full_name: string | null } | null };
 
 /**
- * Banner shown to admins/agents when one or more drivers have gone offline
- * *after starting a trip* — i.e. their GPS was live and has since gone silent.
- * Each entry links to the delivery so its last-known position can be inspected.
+ * Banner shown to admins/agents when one or more drivers have stopped reporting
+ * *after starting a trip* — their GPS fix is older than STALE_AFTER_MS. The
+ * driver app only reports after moving 60 m, so this also catches a driver who
+ * has been parked for a while, not just one who lost signal; the wording says
+ * so. Each entry links to the delivery so its last-known position can be seen.
  */
 export default function OfflineSummary({
   deliveries,
@@ -27,13 +29,14 @@ export default function OfflineSummary({
       <div className="flex items-center gap-2">
         <WarnIcon />
         <h3 className="text-sm font-semibold text-red">
-          {offline.length} driver{offline.length > 1 ? "s" : ""} went offline
-          mid-trip
+          {offline.length} driver{offline.length > 1 ? "s" : ""} not reporting
+          location mid-trip
         </h3>
       </div>
       <p className="mt-0.5 text-xs text-muted2">
-        The trip was started but the driver&rsquo;s GPS has gone silent. Their
-        last known position is still on the map.
+        No location update for over 3 minutes. The driver may be stopped, or
+        their phone may have lost signal. The last known position is still on
+        the map, greyed out.
       </p>
       <ul className="mt-2 flex flex-col gap-1.5">
         {offline.map((d) => {

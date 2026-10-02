@@ -1,49 +1,58 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  clientIpFrom,
+  gateTrackingRequest,
+  getPublicDelivery,
+  recordTrackingMiss,
+  TRACK_RETRY_AFTER_S,
+} from "@/lib/tracking";
 
 export const dynamic = "force-dynamic";
 
 // Anyone with the link can read this; never let a shared cache/CDN store it
-// (it carries customer name, addresses, and the assigned driver's phone).
+// (it carries the customer's name, addresses, and the driver's phone).
 const NO_STORE = {
   "Cache-Control": "private, no-store, max-age=0",
 } as const;
 
 /**
- * Public delivery lookup by tracking token (no auth).
- * Returns only the fields a receiver needs — never the whole fleet. The driver
- * embed is disambiguated by FK name because deliveries has two FKs into
- * profiles (driver_id + agent_id), and only the driver should be exposed.
+ * Public delivery lookup by tracking token (no auth). The customer tracker
+ * polls this every 15 s for status, ETA and the truck position. The token is
+ * the only credential, so every call is rate-limited and the response is the
+ * customer-safe shape from getPublicDelivery (no internal ids, no history).
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { token: string } },
 ) {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("deliveries")
-    .select(
-      "reference, goods, status, " +
-        "origin_label, origin_lat, origin_lng, " +
-        "dest_label, dest_lat, dest_lng, " +
-        "customer_name, " +
-        "last_lat, last_lng, last_speed, last_position_at, delivered_at, picked_up_at, " +
-        "driver:profiles!deliveries_driver_id_fkey(full_name, phone), " +
-        "vehicle:vehicles(plate, name)",
-    )
-    .eq("tracking_token", params.token)
-    .is("deleted_at", null)
-    .maybeSingle();
+  const ip = clientIpFrom(req.headers);
 
-  if (error || !data) {
+  const gate = await gateTrackingRequest(supabase, ip, params.token);
+  if (gate !== "ok") {
+    return NextResponse.json(
+      {
+        error:
+          gate === "locked"
+            ? "Too many invalid tracking links from this network. Try again later."
+            : "Too many requests. Please wait a minute.",
+      },
+      {
+        status: 429,
+        headers: { ...NO_STORE, "Retry-After": String(TRACK_RETRY_AFTER_S) },
+      },
+    );
+  }
+
+  const delivery = await getPublicDelivery(supabase, params.token);
+  if (!delivery) {
+    await recordTrackingMiss(supabase, ip);
     return NextResponse.json(
       { error: "not found" },
       { status: 404, headers: NO_STORE },
     );
   }
 
-  // The customer sees their assigned driver's full details (name, phone, vehicle)
-  // so they can track and contact them. Only the embed presence gates it — there
-  // is a driver only once one is assigned to this delivery.
-  return NextResponse.json({ delivery: data }, { headers: NO_STORE });
+  return NextResponse.json({ delivery }, { headers: NO_STORE });
 }

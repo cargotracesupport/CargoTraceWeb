@@ -79,7 +79,9 @@ export interface Delivery {
   tracking_token: string;
   last_lat: number | null;
   last_lng: number | null;
+  /** Metres per second (convert with speedKmh() from lib/presence). */
   last_speed: number | null;
+  /** Time of the last GPS fix; null = never reported. */
   last_position_at: string | null;
   created_at: string;
   assigned_at: string | null;
@@ -121,7 +123,9 @@ export interface Position {
   driver_id: string | null;
   lat: number;
   lng: number;
+  /** Metres per second. */
   speed: number | null;
+  /** Degrees; null when unknown. */
   heading: number | null;
   recorded_at: string;
   created_at: string;

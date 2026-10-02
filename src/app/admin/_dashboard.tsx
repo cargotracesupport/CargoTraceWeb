@@ -17,9 +17,9 @@ import {
   Users,
   UserCog,
 } from "@/components/icons";
-import { estimateEtaMinutes, formatEta } from "@/lib/eta";
 import { useNow } from "@/components/useNow";
-import { presenceOf } from "@/lib/presence";
+import { presenceOf, fixAgeLabel, isLiveFix } from "@/lib/presence";
+import PositionCard from "@/components/PositionCard";
 import { useSelectedRoute } from "@/components/useSelectedRoute";
 import OfflineSummary from "@/components/OfflineSummary";
 import { formatVehicleSpecs } from "@/lib/vehicle";
@@ -55,16 +55,6 @@ const ACTIVE: Delivery["status"][] = [
   "en_route",
 ];
 
-function timeAgo(iso: string | null): string {
-  if (!iso) return "no signal";
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
 function markersFor(list: DeliveryRow[], now: number): MapMarker[] {
   const out: MapMarker[] = [];
   for (const d of list) {
@@ -73,7 +63,11 @@ function markersFor(list: DeliveryRow[], now: number): MapMarker[] {
         id: `${d.id}-truck`,
         lat: d.last_lat,
         lng: d.last_lng,
-        label: d.reference ?? "Driver",
+        // A stale fix keeps its spot on the map but is drawn grey and says
+        // how old it is, so it never reads as a live position.
+        label: isLiveFix(d.last_position_at, now)
+          ? (d.reference ?? "Driver")
+          : `${d.reference ?? "Driver"} · last seen ${fixAgeLabel(d.last_position_at, now)}`,
         kind: "truck",
         state: presenceOf(d, now),
       });
@@ -113,6 +107,28 @@ export default function Dashboard({
 
   useEffect(() => {
     const supabase = createClient();
+    let alive = true;
+
+    // Realtime has no catch-up: changes made while the socket was down (laptop
+    // asleep, tab in the background, network blip) are simply lost, and the
+    // trucks would then look stale while actually moving. Re-read the active
+    // rows (same select as the page) whenever the channel (re)connects or the
+    // tab becomes visible again.
+    async function resync() {
+      const { data } = await supabase
+        .from("deliveries")
+        .select(
+          "*, driver:profiles!deliveries_driver_id_fkey(full_name), vehicle:vehicles(name, plate, length_m, width_m, capacity_kg), agent:profiles!deliveries_agent_id_fkey(full_name)",
+        )
+        .in("status", ACTIVE)
+        .order("created_at", { ascending: false });
+      if (alive && data) setDeliveries(data as unknown as DeliveryRow[]);
+    }
+    const onVisible = () => {
+      if (document.visibilityState === "visible") resync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     const channel = supabase
       .channel("admin-dashboard-deliveries")
       .on(
@@ -146,8 +162,12 @@ export default function Dashboard({
           });
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") resync();
+      });
     return () => {
+      alive = false;
+      document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -256,7 +276,7 @@ export default function Dashboard({
               [
                 ["Moving", "bg-green"],
                 ["Idle", "bg-amber"],
-                ["Offline", "bg-muted"],
+                ["Stale (no fix for 3+ min)", "bg-muted"],
               ] as const
             ).map(([label, dot]) => (
               <div
@@ -276,6 +296,7 @@ export default function Dashboard({
           {selected ? (
             <DeliveryDetail
               d={selected}
+              now={now}
               onBack={() => setSelectedId(null)}
             />
           ) : (
@@ -315,9 +336,19 @@ export default function Dashboard({
                             {d.customer_name ?? "No customer"}
                           </span>
                           <span
-                            className={`shrink-0 font-mono ${d.last_position_at ? "text-green" : ""}`}
+                            className={`shrink-0 font-mono ${
+                              isLiveFix(d.last_position_at, now)
+                                ? "text-green"
+                                : d.last_position_at
+                                  ? "text-amber"
+                                  : ""
+                            }`}
                           >
-                            {timeAgo(d.last_position_at)}
+                            {d.last_position_at
+                              ? isLiveFix(d.last_position_at, now)
+                                ? fixAgeLabel(d.last_position_at, now)
+                                : `last seen ${fixAgeLabel(d.last_position_at, now)}`
+                              : "no location yet"}
                           </span>
                         </div>
                       </button>
@@ -333,34 +364,15 @@ export default function Dashboard({
   );
 }
 
-function StatRow({
-  label,
-  value,
-  color = "text-text",
+function DeliveryDetail({
+  d,
+  now,
+  onBack,
 }: {
-  label: string;
-  value: string;
-  color?: string;
+  d: DeliveryRow;
+  now: number;
+  onBack: () => void;
 }) {
-  return (
-    <div className="flex items-center justify-between border-b border-border/50 py-2 last:border-0">
-      <span className="text-xs text-muted2">{label}</span>
-      <span className={`font-mono text-sm font-medium ${color}`}>{value}</span>
-    </div>
-  );
-}
-
-function DeliveryDetail({ d, onBack }: { d: DeliveryRow; onBack: () => void }) {
-  const hasPos = d.last_lat != null && d.last_lng != null;
-  const eta =
-    hasPos && d.dest_lat != null && d.dest_lng != null
-      ? estimateEtaMinutes(
-          { lat: d.last_lat as number, lng: d.last_lng as number },
-          { lat: d.dest_lat, lng: d.dest_lng },
-          d.last_speed,
-        )
-      : null;
-
   return (
     <>
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -431,35 +443,7 @@ function DeliveryDetail({ d, onBack }: { d: DeliveryRow; onBack: () => void }) {
           </div>
         </div>
 
-        {hasPos ? (
-          <div className="rounded-lg border border-border bg-s2 px-3">
-            <div className="flex items-center justify-between border-b border-border/50 py-2.5">
-              <span className="ct-label mb-0">Live position</span>
-              <span className="ct-pill bg-green/10 text-green">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green" />
-                GPS lock
-              </span>
-            </div>
-            <StatRow
-              label="Coordinates"
-              value={`${(d.last_lat as number).toFixed(4)}°, ${(d.last_lng as number).toFixed(4)}°`}
-              color="text-blue"
-            />
-            {d.last_speed != null ? (
-              <StatRow
-                label="Speed"
-                value={`${Math.round(d.last_speed)} km/h`}
-                color="text-green"
-              />
-            ) : null}
-            <StatRow label="ETA" value={formatEta(eta)} color="text-green" />
-            <StatRow label="Updated" value={timeAgo(d.last_position_at)} />
-          </div>
-        ) : (
-          <div className="rounded-lg border border-border bg-s2 p-3 text-sm text-muted2">
-            Awaiting GPS signal from the driver…
-          </div>
-        )}
+        <PositionCard d={d} now={now} />
 
         <a
           href={`/track/${d.tracking_token}`}
