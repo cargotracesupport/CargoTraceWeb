@@ -46,11 +46,52 @@ export default function GoogleLiveMap({
   const markerObjs = useRef<Map<string, any>>(new Map());
   const polylinesRef = useRef<any[]>([]); // [past(grey), ahead(blue)]
   const youMarkerRef = useRef<any>(null); // current-location dot
-  // Once the user explicitly recenters on themselves, stop auto-fitting so the
-  // next position poll doesn't yank the camera back to the whole-route bounds.
+  // Auto-fit rules. The camera fits all markers when the SET of markers changes
+  // (first load, a delivery added or removed, selection cleared) or when a
+  // marker has moved out of view — never just because markers moved inside
+  // the view, or a fleet of moving trucks would re-zoom the map every second.
+  // Once the user drags, zooms or recenters on themselves, auto-fit stops
+  // until they press "Show all" or select / deselect a delivery.
   const userMovedRef = useRef(false);
+  const [userMoved, setUserMoved] = useState(false);
+  const fitSigRef = useRef(""); // marker ids at the last fit
+  // zoom_changed fires for our own fitBounds / setZoom as well as the user's,
+  // so a zoom only counts as the user's when real input on the map (pointer,
+  // wheel, touch, key) came just before it.
+  const lastInputRef = useRef(0);
   const [ready, setReady] = useState(0); // bumped once the map exists
   const [locating, setLocating] = useState(false);
+
+  function markUserMoved() {
+    if (userMovedRef.current) return;
+    userMovedRef.current = true;
+    setUserMoved(true);
+  }
+
+  /** Fit every valid marker into view (one marker: centre on it). */
+  function fitAll() {
+    const g = gRef.current;
+    const map = mapRef.current;
+    if (!g || !map) return;
+    const valid = markers.filter((m) => isValidLngLat(m.lng, m.lat));
+    if (valid.length === 0) return;
+    fitSigRef.current = markerSig(valid);
+    if (valid.length === 1) {
+      map.setCenter({ lat: valid[0].lat, lng: valid[0].lng });
+      map.setZoom(14);
+    } else {
+      const bounds = new g.LatLngBounds();
+      valid.forEach((m) => bounds.extend({ lat: m.lat, lng: m.lng }));
+      map.fitBounds(bounds, 60);
+    }
+  }
+
+  /** "Show all": resume auto-fit and fit now. */
+  function showAll() {
+    userMovedRef.current = false;
+    setUserMoved(false);
+    fitAll();
+  }
 
   // Init the map once the SDK has loaded.
   useEffect(() => {
@@ -71,13 +112,37 @@ export default function GoogleLiveMap({
           streetViewControl: false,
           mapTypeControl: false,
         });
+        const map = mapRef.current;
+        // User camera moves stop auto-fit. dragstart is user-only. A zoom is
+        // the user's when input on the map came within the last second (zoom
+        // buttons, double-click, wheel, pinch, +/- keys); our own fitBounds /
+        // setZoom have no input before them. A wheel that only scrolls the
+        // page doesn't zoom the map, so it never fires zoom_changed.
+        map.addListener("dragstart", markUserMoved);
+        map.addListener("zoom_changed", () => {
+          if (Date.now() - lastInputRef.current < 1000) markUserMoved();
+        });
         setReady((n) => n + 1);
       })
       .catch(() => {
         /* SDK failed to load — the map stays blank; caller shows nothing */
       });
+    const el = containerRef.current;
+    const onInput = () => {
+      lastInputRef.current = Date.now();
+    };
+    const INPUTS = ["pointerdown", "wheel", "touchstart", "touchmove", "keydown"];
+    for (const t of INPUTS) {
+      el?.addEventListener(t, onInput, { capture: true, passive: true });
+    }
     return () => {
       cancelled = true;
+      for (const t of INPUTS) {
+        el?.removeEventListener(t, onInput, { capture: true });
+      }
+      if (mapRef.current && gRef.current) {
+        gRef.current.event.clearInstanceListeners(mapRef.current);
+      }
       for (const [, obj] of markerObjs.current) detachMarker(obj);
       markerObjs.current.clear();
       for (const p of polylinesRef.current) p?.setMap?.(null);
@@ -132,24 +197,28 @@ export default function GoogleLiveMap({
     }
 
     if (fit && !focus && !userMovedRef.current && valid.length > 0) {
-      const bounds = new g.LatLngBounds();
-      valid.forEach((m) => bounds.extend({ lat: m.lat, lng: m.lng }));
-      if (valid.length === 1) {
-        map.setCenter({ lat: valid[0].lat, lng: valid[0].lng });
-        map.setZoom(14);
-      } else {
-        map.fitBounds(bounds, 60);
-      }
+      // Refit only when markers were added/removed, or one left the view.
+      const view = map.getBounds?.();
+      const outOfView =
+        !!view && valid.some((m) => !view.contains({ lat: m.lat, lng: m.lng }));
+      if (markerSig(valid) !== fitSigRef.current || outOfView) fitAll();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markers, fit, ready]);
 
-  // Camera fly-to a focused point (e.g. a selected driver), only when the key changes.
+  // Selecting or deselecting (focusKey changes) is explicit navigation: resume
+  // auto-fit, then fly to the focused point or fit everything.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !focus) return;
-    map.panTo({ lat: focus.lat, lng: focus.lng });
-    map.setZoom(focus.zoom ?? 13);
+    if (!map) return;
+    userMovedRef.current = false;
+    setUserMoved(false);
+    if (focus) {
+      map.panTo({ lat: focus.lat, lng: focus.lng });
+      map.setZoom(focus.zoom ?? 13);
+    } else if (fit) {
+      fitAll();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, ready]);
 
@@ -244,7 +313,7 @@ export default function GoogleLiveMap({
         const map = mapRef.current;
         if (!g || !map) return;
         const at = { lat: p.coords.latitude, lng: p.coords.longitude };
-        userMovedRef.current = true; // stop auto-fit fighting the recenter
+        markUserMoved(); // stop auto-fit fighting the recenter
         map.panTo(at);
         map.setZoom(Math.max(map.getZoom?.() ?? 15, 15));
         if (!youMarkerRef.current) {
@@ -314,8 +383,40 @@ export default function GoogleLiveMap({
           </svg>
         )}
       </button>
+      {fit && userMoved && !focus ? (
+        <button
+          type="button"
+          onClick={showAll}
+          aria-label="Show all on the map"
+          title="Show all"
+          className="absolute left-3 top-14 z-[2] inline-flex h-9 items-center gap-1.5 rounded-lg border border-border2 bg-s1/95 px-2.5 text-xs font-medium text-muted2 shadow-sm backdrop-blur transition-colors hover:text-primary"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+          </svg>
+          Show all
+        </button>
+      ) : null}
     </div>
   );
+}
+
+/** Identity of a marker set (ids only), so moving markers don't change it. */
+function markerSig(markers: Array<{ id: string }>): string {
+  return markers
+    .map((m) => m.id)
+    .sort()
+    .join("|");
 }
 
 // Split a route at the point nearest the vehicle: everything up to that point is
