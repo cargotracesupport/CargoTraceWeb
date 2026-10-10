@@ -11,8 +11,10 @@ import { formatEta, formatKm, haversineKm } from "@/lib/eta";
 import {
   watchDriver,
   isNativeTracking,
+  pingDue,
   type DriverFix,
   type DriverWatch,
+  type SentPing,
 } from "@/lib/driverGeo";
 
 // How close the driver must be to the pickup for the "Confirm pickup" button to
@@ -94,9 +96,14 @@ export default function DriverTrip({
     watchRef.current = null;
   }, []);
 
-  // Push one GPS fix to the (authenticated, ownership-checked) ingest endpoint.
+  // Push one GPS fix to the (authenticated, ownership-checked) ingest endpoint,
+  // throttled like the mobile app (pingDue): the screen still updates on every
+  // fix, only the upload is rate-limited.
+  const lastSentRef = useRef<SentPing | null>(null);
   const sendPing = useCallback(
     async (fix: DriverFix) => {
+      if (!pingDue(lastSentRef.current, fix.lat, fix.lng)) return;
+      lastSentRef.current = { lat: fix.lat, lng: fix.lng, at: Date.now() };
       try {
         await fetch("/api/track", {
           method: "POST",

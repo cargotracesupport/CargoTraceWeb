@@ -141,3 +141,40 @@ export function watchDriver(
 ): DriverWatch {
   return isNativeTracking() ? watchNative(onFix, onError) : watchWeb(onFix, onError);
 }
+
+// ── Upload throttle ──────────────────────────────────────────────────────
+// Same rule as the driver mobile app: send a fix only after moving 60 m AND
+// 15 s since the last one, plus a heartbeat every 60 s so a driver who has
+// stopped (loading at pickup, in traffic) doesn't look stale on the maps.
+// The browser reports roughly every second while moving; uploading all of
+// them multiplied database writes and realtime messages ~15x.
+const PING_MIN_MS = 15_000;
+const PING_MIN_M = 60;
+const PING_HEARTBEAT_MS = 60_000;
+
+export type SentPing = { lat: number; lng: number; at: number };
+
+/** Whether a new fix should be uploaded, given the last one that was. */
+export function pingDue(
+  last: SentPing | null,
+  lat: number,
+  lng: number,
+  now = Date.now(),
+): boolean {
+  if (!last) return true;
+  const dt = now - last.at;
+  if (dt >= PING_HEARTBEAT_MS) return true;
+  if (dt < PING_MIN_MS) return false;
+  return metresBetween(last.lat, last.lng, lat, lng) >= PING_MIN_M;
+}
+
+function metresBetween(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLng = toRad(bLng - aLng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}

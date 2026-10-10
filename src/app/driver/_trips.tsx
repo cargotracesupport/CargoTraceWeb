@@ -13,6 +13,7 @@ import { groupSameRoute, haversineKm, type Pt } from "@/lib/cluster";
 import { groupByRoad, type RouteItem } from "@/lib/routeGroup";
 import { roadRouteDetailed } from "@/lib/route";
 import { formatEta, formatKm } from "@/lib/eta";
+import { pingDue, type SentPing } from "@/lib/driverGeo";
 
 const ACTIVE = new Set(["assigned", "en_route"]);
 const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -272,9 +273,15 @@ function MultiStopTrip({ stops, index }: { stops: Delivery[]; index: number }) {
     watchRef.current = null;
   }, []);
 
+  // Uploads are throttled like the mobile app (pingDue); the map still
+  // follows every fix.
+  const lastSentRef = useRef<SentPing | null>(null);
   const sendPing = useCallback(async (p: GeolocationPosition) => {
     const deliveryId = enRouteIdRef.current;
     if (!deliveryId) return;
+    const { latitude: lat, longitude: lng } = p.coords;
+    if (!pingDue(lastSentRef.current, lat, lng)) return;
+    lastSentRef.current = { lat, lng, at: Date.now() };
     try {
       await fetch("/api/track", {
         method: "POST",

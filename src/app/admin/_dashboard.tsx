@@ -97,9 +97,11 @@ function markersFor(list: DeliveryRow[], now: number): MapMarker[] {
 export default function Dashboard({
   initial,
   counts,
+  orgId,
 }: {
   initial: DeliveryRow[];
   counts: Counts;
+  orgId: string;
 }) {
   const [deliveries, setDeliveries] = useState<DeliveryRow[]>(initial);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -133,7 +135,13 @@ export default function Dashboard({
       .channel("admin-dashboard-deliveries")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "deliveries" },
+        // Filtered server-side to this organisation's rows.
+        {
+          event: "*",
+          schema: "public",
+          table: "deliveries",
+          filter: `org_id=eq.${orgId}`,
+        },
         (payload) => {
           setDeliveries((prev) => {
             if (payload.eventType === "DELETE") {
@@ -170,7 +178,7 @@ export default function Dashboard({
       document.removeEventListener("visibilitychange", onVisible);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [orgId]);
 
   const selected = selectedId
     ? (deliveries.find((d) => d.id === selectedId) ?? null)

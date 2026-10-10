@@ -121,7 +121,14 @@ export default function AgentMap({
       .channel("agent-map-deliveries")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "deliveries" },
+        // Filtered server-side to this agent's rows, so Realtime doesn't run
+        // the RLS check for every delivery change in the org.
+        {
+          event: "*",
+          schema: "public",
+          table: "deliveries",
+          filter: `agent_id=eq.${agentId}`,
+        },
         (payload) => {
           setDeliveries((prev) => {
             if (payload.eventType === "DELETE") {
