@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clientIpFrom, isTrackingToken } from "@/lib/tracking";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,8 @@ const normPhone = (s: string) => (s ?? "").replace(/\D/g, "").slice(-10);
 // serverless instances). 10 tries/minute is plenty for a real human.
 const RL_LIMIT = 10;
 const RL_WINDOW_S = 60;
+// Every drop-off attempt from one IP, whatever link it uses.
+const IP_LIMIT = 30;
 const MAX_LABEL_LEN = 200;
 
 /**
@@ -38,15 +41,28 @@ export async function POST(
     );
   }
 
+  // A malformed token can't match anything. Reject it before the rate limiter
+  // writes a row keyed on it, or arbitrary URL text could fill rate_hits.
+  if (!isTrackingToken(params.token)) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
   const supabase = createAdminClient();
 
-  // Rate-limit per tracking token (durable, cross-instance) to blunt brute-force.
-  const { data: allowed } = await supabase.rpc("rate_limit_hit", {
-    p_key: `dropoff:${params.token}`,
-    p_limit: RL_LIMIT,
-    p_window_seconds: RL_WINDOW_S,
-  });
-  if (allowed === false) {
+  // Rate-limit per IP and per tracking token (durable, cross-instance) to
+  // blunt brute-force. Fails CLOSED: if the limiter errors, refuse.
+  const limited = async (key: string, limit: number) => {
+    const { data, error } = await supabase.rpc("rate_limit_hit", {
+      p_key: key,
+      p_limit: limit,
+      p_window_seconds: RL_WINDOW_S,
+    });
+    return !!error || data !== true;
+  };
+  if (
+    (await limited(`dropoff:ip:${clientIpFrom(req.headers)}`, IP_LIMIT)) ||
+    (await limited(`dropoff:${params.token}`, RL_LIMIT))
+  ) {
     return NextResponse.json(
       { error: "Too many attempts. Please wait a minute and try again." },
       { status: 429, headers: { "Retry-After": String(RL_WINDOW_S) } },
@@ -56,7 +72,7 @@ export async function POST(
   const { data: d } = await supabase
     .from("deliveries")
     .select(
-      "id, status, reference, goods, origin_label, customer_name, customer_phone, customer_id, org_id, dest_lat, driver_id",
+      "id, status, reference, goods, origin_label, customer_name, customer_phone, customer_id, org_id, dest_lat, driver_id, agent_id",
     )
     .eq("tracking_token", params.token)
     .is("deleted_at", null)
@@ -113,9 +129,8 @@ export async function POST(
         : "pending"
       : d.status;
 
-  // Only set the drop-off while the delivery is still waiting for it — this
-  // avoids clobbering a trip that already started (the freeze trigger would
-  // reject it) and makes the write idempotent.
+  // The customer may set or change the drop-off until the trip starts; after
+  // that the freeze trigger would reject it, so started trips are excluded.
   const { data: updated, error: upErr } = await supabase
     .from("deliveries")
     .update({
@@ -147,6 +162,26 @@ export async function POST(
       },
       { status: 409 },
     );
+  }
+
+  // Changing a drop-off that was already set is worth a human look: it's how a
+  // diverted delivery would show up. Tell the admins, the owning agent and the
+  // assigned driver. Non-fatal.
+  if (d.dest_lat != null) {
+    const ref = d.reference ?? "a delivery";
+    const title = `Drop-off changed — ${ref}`;
+    const body = `The customer moved the drop-off${label ? ` to ${label}` : ""}.`;
+    const rows: Array<Record<string, unknown>> = [
+      { org_id: d.org_id, recipient_role: "admin", delivery_id: d.id, type: "dropoff_changed", title, body },
+    ];
+    if (d.agent_id) {
+      rows.push({ org_id: d.org_id, recipient_id: d.agent_id, recipient_role: "agent", delivery_id: d.id, type: "dropoff_changed", title, body });
+    }
+    if (d.driver_id) {
+      rows.push({ org_id: d.org_id, recipient_id: d.driver_id, recipient_role: "driver", delivery_id: d.id, type: "dropoff_changed", title, body });
+    }
+    const { error: nErr } = await supabase.from("notifications").insert(rows);
+    if (nErr) console.error("dropoff_changed notify failed:", nErr.message);
   }
 
   // Save this drop-off to the customer's address book so it's available on

@@ -35,24 +35,27 @@ function clientIp(req: Request): string {
   );
 }
 
-/** Record one hit; false when the key is already at its limit. */
+// Both fail CLOSED: if the limiter can't be read (database trouble), the
+// login is refused rather than left unthrottled.
+
+/** Record one hit; false when the key is already at its limit (or on error). */
 async function hit(sb: Admin, key: string, limit: number, windowS: number) {
-  const { data } = await sb.rpc("rate_limit_hit", {
+  const { data, error } = await sb.rpc("rate_limit_hit", {
     p_key: key,
     p_limit: limit,
     p_window_seconds: windowS,
   });
-  return data !== false;
+  return !error && data === true;
 }
 
-/** Read-only: true while the key is still under its limit. */
+/** Read-only: true while the key is still under its limit (false on error). */
 async function under(sb: Admin, key: string, limit: number, windowS: number) {
-  const { data } = await sb.rpc("rate_limit_peek", {
+  const { data, error } = await sb.rpc("rate_limit_peek", {
     p_key: key,
     p_limit: limit,
     p_window_seconds: windowS,
   });
-  return data !== false;
+  return !error && data === true;
 }
 
 async function lockedOut(sb: Admin, key: string, perHour: number, perDay: number) {
@@ -118,6 +121,8 @@ export async function POST(req: Request) {
   const token = String(body.token ?? "").trim();
   const reference = String(body.reference ?? "").trim();
   let phone = String(body.phone ?? "").trim();
+  // The organisation the lookup is confined to (token login only).
+  let tokenOrg: string | null = null;
 
   const supabase = createAdminClient();
 
@@ -143,7 +148,7 @@ export async function POST(req: Request) {
     }
     const { data: d } = await supabase
       .from("deliveries")
-      .select("customer_phone")
+      .select("customer_phone, org_id")
       .eq("tracking_token", token)
       .is("deleted_at", null)
       .maybeSingle();
@@ -155,6 +160,7 @@ export async function POST(req: Request) {
       );
     }
     phone = d.customer_phone;
+    tokenOrg = d.org_id;
   } else {
     // ── Phone + reference login. ──────────────────────────────────────────
     if (normPhone(phone).length < 6) {
@@ -179,8 +185,13 @@ export async function POST(req: Request) {
     }
   }
 
-  const { data, error } = await supabase.rpc("deliveries_for_customer_phone", {
+  // Always confined to one organisation (migration 0029): the token's, or
+  // wherever this phone + reference pair exists. Never every org's deliveries
+  // for a phone number.
+  const { data, error } = await supabase.rpc("customer_deliveries", {
     p_phone: phone,
+    p_org: tokenOrg,
+    p_reference: tokenOrg ? null : reference,
   });
   if (error) {
     console.error("customer lookup failed:", error.message);
@@ -194,6 +205,7 @@ export async function POST(req: Request) {
   // Phone+reference path: the reference must belong to one of this number's
   // deliveries — that pairing is the proof it's really the customer (same 403
   // whether the phone or the reference is wrong, so nothing can be probed).
+  // customer_deliveries only returns rows when the pair matched.
   const verified =
     !!token ||
     rows.some((r) => normRef(r.reference ?? "") === normRef(reference));
