@@ -128,7 +128,7 @@ export default function CustomerAddressesEditor({
     setDelBusy(true);
     setError(null);
     const supabase = createClient();
-    // Soft delete: stamp deleted_at (restorable from the admin Trash for 90 days).
+    // Soft delete: stamp deleted_at (restorable from the admin Trash for 60 days).
     const { error: err } = await supabase.rpc("soft_delete_row", {
       p_table: "customer_addresses",
       p_id: a.id,
@@ -347,7 +347,7 @@ export default function CustomerAddressesEditor({
           error && delTarget ? (
             <span className="text-red">{error}</span>
           ) : (
-            `${delTarget?.nickname || delTarget?.label || "This address"} moves to the Trash. Past deliveries keep their location, and an admin can restore it for 90 days.`
+            `${delTarget?.nickname || delTarget?.label || "This address"} moves to the Trash. Past deliveries keep their location, and an admin can restore it for 60 days.`
           )
         }
         confirmLabel="Delete"

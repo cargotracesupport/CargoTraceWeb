@@ -15,7 +15,7 @@ type TrashItem = {
   deleted_at: string;
 };
 
-const RETENTION_DAYS = 90;
+const RETENTION_DAYS = 60;
 
 // kind -> table name + label + icon. The table drives restore/purge.
 const KIND: Record<

@@ -12,7 +12,7 @@ type Table = "deliveries" | "vehicles" | "devices";
 /**
  * Move a row to the Trash (admin only; RLS enforces it) with a confirm prompt,
  * then refresh. This is a soft delete: it stamps deleted_at, so the row drops
- * out of every list but can be restored from the Trash page for 90 days, after
+ * out of every list but can be restored from the Trash page for 60 days, after
  * which a daily job removes it for good.
  * For deleting drivers (auth users) use the /api/drivers DELETE endpoint instead.
  */
@@ -80,7 +80,7 @@ export default function DeleteButton({
             <span className="text-red">{error}</span>
           ) : (
             confirmText ??
-            "This is moved to the Trash and can be restored for 90 days."
+            "This is moved to the Trash and can be restored for 60 days."
           )
         }
         confirmLabel="Delete"
