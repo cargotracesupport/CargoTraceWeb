@@ -69,9 +69,13 @@ export default function CustomerTracker({
   const dropoffSavedAt = useRef(0);
 
   // Customer-facing update feed (polled from the public notifications endpoint).
+  // Loaded once more when the delivery finishes, then no further polling; and
+  // skipped while the tab is hidden (caught up as soon as it's visible again).
   const [updates, setUpdates] = useState<
     Array<{ type: string; title: string; body: string | null; created_at: string }>
   >([]);
+  const finished =
+    gone || delivery.status === "delivered" || delivery.status === "cancelled";
   useEffect(() => {
     let active = true;
     async function load() {
@@ -87,12 +91,24 @@ export default function CustomerTracker({
       }
     }
     load();
-    const t = setInterval(load, 15000);
+    if (finished) {
+      return () => {
+        active = false;
+      };
+    }
+    const t = setInterval(() => {
+      if (!document.hidden) load();
+    }, 15000);
+    const onVisible = () => {
+      if (!document.hidden) load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
       clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [token]);
+  }, [token, finished]);
 
   // Immediately reflect a saved drop-off (before the next poll) so the setter
   // flips to the live view without a page reload.
@@ -171,10 +187,18 @@ export default function CustomerTracker({
       }
     }
 
-    timer = setInterval(poll, POLL_MS);
+    // Don't poll from a hidden tab; catch up as soon as it's visible again.
+    timer = setInterval(() => {
+      if (!document.hidden) poll();
+    }, POLL_MS);
+    const onVisible = () => {
+      if (!document.hidden && timer) poll();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       active = false;
       stop();
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [token, initial.status]);
 
