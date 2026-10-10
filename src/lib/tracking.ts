@@ -56,13 +56,28 @@ export function isTrackingToken(token: string): boolean {
   return TOKEN_RE.test(token);
 }
 
-/** Caller IP from proxy headers (Vercel sets x-forwarded-for). */
+/**
+ * Caller identity for rate limiting, from proxy headers (Vercel sets
+ * x-forwarded-for). An IPv6 client usually controls a whole /64, so it is
+ * keyed by that prefix; otherwise rotating addresses would dodge every limit.
+ */
 export function clientIpFrom(headers: Headers): string {
-  return (
+  const ip =
     (headers.get("x-forwarded-for") ?? "").split(",")[0].trim() ||
     headers.get("x-real-ip") ||
-    "unknown"
-  );
+    "unknown";
+  return ip.includes(":") ? ipv6Prefix64(ip) : ip;
+}
+
+/** First four groups of an IPv6 address ("2001:db8:0:1::/64"). */
+function ipv6Prefix64(ip: string): string {
+  const bare = ip.replace(/^\[|\](:\d+)?$/g, "").split("%")[0].toLowerCase();
+  const [head, tail] = bare.split("::");
+  const left = head ? head.split(":") : [];
+  const right = tail !== undefined && tail ? tail.split(":") : [];
+  const fill = tail !== undefined ? 8 - left.length - right.length : 0;
+  const groups = [...left, ...Array(Math.max(0, fill)).fill("0"), ...right];
+  return groups.slice(0, 4).map((g) => g || "0").join(":") + "::/64";
 }
 
 // ── Rate limits ───────────────────────────────────────────────────────────
@@ -79,16 +94,22 @@ const MISS_PER_DAY = 60;
 
 export type TrackGate = "ok" | "throttled" | "locked";
 
+// The limiter fails CLOSED: if it can't be read, the request is refused.
 async function under(sb: Admin, key: string, limit: number, windowS: number) {
-  const { data } = await sb.rpc("rate_limit_peek", {
+  const { data, error } = await sb.rpc("rate_limit_peek", {
     p_key: key,
     p_limit: limit,
     p_window_seconds: windowS,
   });
-  return data !== false;
+  return !error && data === true;
 }
 
-/** Check (and count) one tracking request. Call before the lookup. */
+/**
+ * Check (and count) one tracking request. Call before the lookup. A token
+ * that isn't a uuid passes the gate without writing a row keyed on it (the
+ * lookup then misses and records a per-IP miss), so junk URLs can't fill
+ * rate_hits.
+ */
 export async function gateTrackingRequest(
   sb: Admin,
   ip: string,
@@ -100,12 +121,13 @@ export async function gateTrackingRequest(
     under(sb, missKey, MISS_PER_DAY, MISS_KEEP_S),
   ]);
   if (!hour || !day) return "locked";
-  const { data: allowed } = await sb.rpc("rate_limit_hit", {
-    p_key: `track:${ip}:${token.slice(0, 36)}`,
+  if (!isTrackingToken(token)) return "ok";
+  const { data: allowed, error } = await sb.rpc("rate_limit_hit", {
+    p_key: `track:${ip}:${token}`,
     p_limit: PER_TOKEN_LIMIT,
     p_window_seconds: PER_TOKEN_WINDOW_S,
   });
-  return allowed === false ? "throttled" : "ok";
+  return error || allowed !== true ? "throttled" : "ok";
 }
 
 /** Count a lookup that matched no delivery against the caller's IP. */

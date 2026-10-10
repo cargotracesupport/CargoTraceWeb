@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clientIpFrom } from "@/lib/tracking";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +29,7 @@ const IP_FAIL_DAY = 30;
 type Admin = ReturnType<typeof createAdminClient>;
 
 function clientIp(req: Request): string {
-  return (
-    (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
-  );
+  return clientIpFrom(req.headers);
 }
 
 // Both fail CLOSED: if the limiter can't be read (database trouble), the
