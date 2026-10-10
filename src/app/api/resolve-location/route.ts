@@ -6,6 +6,7 @@ import {
   isAllowedMapsHost,
 } from "@/lib/location";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { clientIpFrom } from "@/lib/tracking";
 
 export const dynamic = "force-dynamic";
 
@@ -34,19 +35,15 @@ export async function POST(req: Request) {
   const input = typeof body.input === "string" ? body.input.trim() : "";
   if (!input) return NextResponse.json({ error: "empty" }, { status: 400 });
 
-  // Best-effort IP from proxy headers. Falls back to "anon" so at worst all
-  // anonymous callers share one bucket (still bounded).
-  const ip =
-    (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() ||
-    req.headers.get("x-real-ip") ||
-    "anon";
+  // Per client IP (IPv6 by /64). Fails closed if the limiter errors.
+  const ip = clientIpFrom(req.headers);
   const admin = createAdminClient();
-  const { data: allowed } = await admin.rpc("rate_limit_hit", {
+  const { data: allowed, error: rlErr } = await admin.rpc("rate_limit_hit", {
     p_key: `resolveloc:${ip}`,
     p_limit: RL_LIMIT,
     p_window_seconds: RL_WINDOW_S,
   });
-  if (allowed === false) {
+  if (rlErr || allowed !== true) {
     return NextResponse.json(
       { error: "rate limited" },
       { status: 429, headers: { "Retry-After": String(RL_WINDOW_S) } },
@@ -80,21 +77,49 @@ export async function POST(req: Request) {
   // Hard limits on the outbound fetch: an attacker-influenced URL (Google
   // Maps short link chain) must not hang the function slot or stream MB of
   // HTML. 8 s cap on the whole request, 512 KB cap on the read body.
+  // Redirects are followed by hand so every hop is re-checked against the
+  // host allow-list; with redirect: "follow" an allowed first hop could
+  // bounce the fetch to any internal or third-party address.
   const FETCH_TIMEOUT_MS = 8000;
   const MAX_BYTES = 512 * 1024;
+  const MAX_HOPS = 5;
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
-      redirect: "follow",
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; Goodswala/1.0)" },
-      cache: "no-store",
-      signal: ac.signal,
-    });
-    // coordinates in the final URL after the redirect(s)?
-    const fromFinal = coordsFromMapsText(res.url);
-    if (fromFinal) return NextResponse.json({ ok: true, ...fromFinal });
-    // else scan the (capped) returned page.
+    let current = url;
+    let res: Response | null = null;
+    for (let hop = 0; hop <= MAX_HOPS; hop++) {
+      if (!isAllowedMapsHost(current)) break;
+      // coordinates in this hop's URL?
+      const fromUrl = coordsFromMapsText(current);
+      if (fromUrl) return NextResponse.json({ ok: true, ...fromUrl });
+      const r = await fetch(current, {
+        redirect: "manual",
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; Goodswala/1.0)" },
+        cache: "no-store",
+        signal: ac.signal,
+      });
+      const next =
+        r.status >= 300 && r.status < 400 ? r.headers.get("location") : null;
+      if (next) {
+        try {
+          await r.body?.cancel();
+        } catch {
+          /* ignore */
+        }
+        current = new URL(next, current).toString();
+        continue;
+      }
+      res = r;
+      break;
+    }
+    if (!res) {
+      return NextResponse.json(
+        { error: "couldn't read that link" },
+        { status: 422 },
+      );
+    }
+    // No coordinates in any URL along the way: scan the (capped) final page.
     const reader = res.body?.getReader();
     if (reader) {
       const decoder = new TextDecoder();

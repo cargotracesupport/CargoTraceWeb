@@ -59,14 +59,25 @@ export function coordsFromMapsText(text: string): Point | null {
   return null;
 }
 
+// Google's share-link shorteners.
+const SHORTENER_HOSTS = new Set(["maps.app.goo.gl", "goo.gl", "g.co"]);
+// google.com / google.co.in / google.com.au, optionally www. or maps. —
+// anchored at both ends so "google.attacker.com" can't pass.
+const GOOGLE_HOST_RE = /^(?:www\.|maps\.)?google\.(?:com|co\.[a-z]{2}|com\.[a-z]{2})$/;
+
 /**
- * SSRF guard: only follow redirects / fetch known Google + Maps-shortener hosts.
- * Matches google.com, google.co.in, maps.google.com, maps.app.goo.gl, goo.gl, g.co.
+ * SSRF guard: only fetch https URLs on Google Maps hosts, on the default
+ * port, with no credentials. The server route re-checks this on every
+ * redirect hop, so a link can't bounce the fetch somewhere else.
  */
 export function isAllowedMapsHost(url: string): boolean {
   try {
-    const h = new URL(url).hostname.toLowerCase();
-    return /(?:^|\.)(google\.[a-z.]+|goo\.gl|g\.co)$/.test(h);
+    const u = new URL(url);
+    if (u.protocol !== "https:" || u.port !== "" || u.username || u.password) {
+      return false;
+    }
+    const h = u.hostname.toLowerCase();
+    return SHORTENER_HOSTS.has(h) || GOOGLE_HOST_RE.test(h);
   } catch {
     return false;
   }
