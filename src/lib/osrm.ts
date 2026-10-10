@@ -7,6 +7,14 @@ export type LngLat = [number, number];
 const MAX_POINTS = 90;
 
 const matrixCache = new Map<string, number[][] | null>();
+// Bounded so a board left open all day doesn't grow without limit.
+const MAX_CACHED = 50;
+function remember(key: string, value: number[][] | null) {
+  matrixCache.set(key, value);
+  if (matrixCache.size > MAX_CACHED) {
+    matrixCache.delete(matrixCache.keys().next().value as string);
+  }
+}
 const keyOf = (points: LngLat[]) =>
   points.map((p) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`).join(";");
 
@@ -35,13 +43,13 @@ export async function drivingDurationMatrix(
         const clean = j.durations.map((row) =>
           row.map((v) => (v < 0 ? Infinity : v)),
         );
-        matrixCache.set(key, clean);
+        remember(key, clean);
         return clean;
       }
     }
   } catch {
     /* network error — treat as unavailable */
   }
-  matrixCache.set(key, null);
+  remember(key, null);
   return null;
 }

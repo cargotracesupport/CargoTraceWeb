@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -42,8 +43,25 @@ function validPoints(v: unknown): v is LngLat[] {
 export async function POST(req: Request) {
   // Both callers (agent dispatch board, driver trip list) are behind a login,
   // so require a session — this endpoint hits OSRM and must not be an open proxy.
-  if (!(await getSessionProfile())) {
+  const session = await getSessionProfile();
+  if (!session) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  // Per-user cap: each call is an N×N request to the public OSRM server, which
+  // bans abusive callers (that would break grouping for everyone). Fails closed.
+  const { data: allowed, error: rlErr } = await createAdminClient().rpc(
+    "rate_limit_hit",
+    {
+      p_key: `matrix:user:${session.userId}`,
+      p_limit: 20,
+      p_window_seconds: 60,
+    },
+  );
+  if (rlErr || allowed !== true) {
+    return NextResponse.json(
+      { error: "rate limited" },
+      { status: 429, headers: { "Retry-After": "60" } },
+    );
   }
 
   let body: { points?: unknown };
@@ -69,7 +87,10 @@ export async function POST(req: Request) {
   try {
     const coordStr = pts.map((p) => `${p[0]},${p[1]}`).join(";");
     const url = `https://router.project-osrm.org/table/v1/driving/${coordStr}?annotations=duration`;
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!res.ok) {
       return NextResponse.json(
         { error: "routing unavailable" },

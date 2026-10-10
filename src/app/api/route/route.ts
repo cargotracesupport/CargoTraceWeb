@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isTrackingToken } from "@/lib/tracking";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,10 @@ type RouteOut = { coords: LngLat[]; legs: Leg[] };
 
 // Google allows up to 25 intermediates; keep the whole path under that.
 const MAX_WAYPOINTS = 25;
+// The public tracker only ever asks for truck → pickup → drop-off.
+const MAX_TOKEN_WAYPOINTS = 3;
+// Outbound calls must not hold a function slot open indefinitely.
+const UPSTREAM_TIMEOUT_MS = 8000;
 
 // Per-instance cache. Fixed pickups/drop-offs repeat constantly; the moving
 // truck is already throttled to ~1 km buckets by callers.
@@ -74,6 +79,7 @@ async function googleRoute(
           polylineEncoding: "GEO_JSON_LINESTRING",
         }),
         cache: "no-store",
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
       },
     );
     if (!res.ok) return null;
@@ -105,7 +111,10 @@ async function osrmRoute(wp: LngLat[]): Promise<RouteOut | null> {
   try {
     const coordStr = wp.map((p) => `${p[0]},${p[1]}`).join(";");
     const url = `https://router.project-osrm.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`;
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
     if (!res.ok) return null;
     const json = (await res.json()) as {
       routes?: {
@@ -131,23 +140,50 @@ async function osrmRoute(wp: LngLat[]): Promise<RouteOut | null> {
   }
 }
 
-// A leaked tracking link should not be an unlimited tap on the Google quota, so
-// the token path is rate-limited. Customers need very few calls (the client
-// caches routes and only re-fetches when the driver moves ~1 km); this cap is
-// generous for them but blunts abuse.
-const RL_LIMIT = 30;
+// Every caller is rate-limited: each call can be a paid Google Routes request.
+// Customers need very few calls (the client caches routes and only re-fetches
+// when the driver moves ~1 km); staff maps re-route on selection changes, not
+// on every GPS fix. Generous for real use, a hard ceiling for abuse.
+const RL_LIMIT = 30; // per tracking token
+const STAFF_RL_LIMIT = 60; // per signed-in user
 const RL_WINDOW_S = 60;
 
 // Gate the caller. This endpoint calls Google Routes (TRAFFIC_AWARE — the
 // priciest tier) when GOOGLE_ROUTES_KEY is set, so it must not be an open proxy.
-// Signed-in staff (admin / agent / driver) pass freely; otherwise a valid
-// customer tracking token is required (the public tracker genuinely needs
-// routing) and is rate-limited per token. Returns an error response, or null.
-async function gate(token: unknown): Promise<NextResponse | null> {
-  if (await getSessionProfile()) return null; // trusted staff session
-  const t = typeof token === "string" ? token : "";
-  if (!t) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+// Signed-in staff (admin / agent / driver) are limited per user; otherwise a
+// valid customer tracking token is required (the public tracker genuinely
+// needs routing), limited per token and to MAX_TOKEN_WAYPOINTS points. The
+// limiter fails CLOSED. Returns an error response, or null.
+async function gate(
+  token: unknown,
+  waypointCount: number,
+): Promise<NextResponse | null> {
   const admin = createAdminClient();
+  const limited = async (key: string, limit: number) => {
+    const { data, error } = await admin.rpc("rate_limit_hit", {
+      p_key: key,
+      p_limit: limit,
+      p_window_seconds: RL_WINDOW_S,
+    });
+    return !!error || data !== true;
+  };
+  const tooMany = () =>
+    NextResponse.json(
+      { error: "rate limited" },
+      { status: 429, headers: { "Retry-After": String(RL_WINDOW_S) } },
+    );
+
+  const session = await getSessionProfile();
+  if (session) {
+    return (await limited(`route:user:${session.userId}`, STAFF_RL_LIMIT))
+      ? tooMany()
+      : null;
+  }
+
+  const t = typeof token === "string" ? token : "";
+  if (!isTrackingToken(t) || waypointCount > MAX_TOKEN_WAYPOINTS) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
   const { data } = await admin
     .from("deliveries")
     .select("id")
@@ -155,18 +191,7 @@ async function gate(token: unknown): Promise<NextResponse | null> {
     .is("deleted_at", null)
     .maybeSingle();
   if (!data) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  const { data: allowed } = await admin.rpc("rate_limit_hit", {
-    p_key: `route:${t}`,
-    p_limit: RL_LIMIT,
-    p_window_seconds: RL_WINDOW_S,
-  });
-  if (allowed === false) {
-    return NextResponse.json(
-      { error: "rate limited" },
-      { status: 429, headers: { "Retry-After": String(RL_WINDOW_S) } },
-    );
-  }
-  return null;
+  return (await limited(`route:${t}`, RL_LIMIT)) ? tooMany() : null;
 }
 
 export async function POST(req: Request) {
@@ -176,12 +201,12 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
-  const denied = await gate(body.token);
-  if (denied) return denied;
   const wp = body.waypoints;
   if (!validWaypoints(wp)) {
     return NextResponse.json({ error: "invalid waypoints" }, { status: 400 });
   }
+  const denied = await gate(body.token, wp.length);
+  if (denied) return denied;
 
   const key = keyOf(wp);
   const cached = cache.get(key);

@@ -71,9 +71,23 @@ export function useSelectedRoute(sel: Sel): RouteProps {
 
   if (!sel) return {};
   if (headingToPickup) return { route: pickupRoute };
+  // After pickup: the planned pickup → drop-off road, split at the truck by
+  // the map (grey behind, blue ahead) — the same thing the customer sees. It
+  // is fetched once, not re-routed from the exact truck position on every GPS
+  // fix (that was one paid Google Routes call per fix per open tab). Without
+  // a pickup point, route from the truck's ~1 km bucket instead.
+  if (enroute && hasDest && hasOrigin) {
+    return {
+      roadFrom: [sel.origin_lng as number, sel.origin_lat as number],
+      roadTo: [sel.dest_lng as number, sel.dest_lat as number],
+    };
+  }
   if (enroute && hasDest) {
     return {
-      roadFrom: [sel.last_lng as number, sel.last_lat as number],
+      roadFrom: [
+        Number((sel.last_lng as number).toFixed(2)),
+        Number((sel.last_lat as number).toFixed(2)),
+      ],
       roadTo: [sel.dest_lng as number, sel.dest_lat as number],
     };
   }

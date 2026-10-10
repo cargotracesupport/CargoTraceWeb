@@ -9,6 +9,15 @@ export type RouteLeg = { durationSec: number; distanceM: number };
 export type DetailedRoute = { coords: LngLat[]; legs: RouteLeg[] };
 
 const detailCache = new Map<string, DetailedRoute | null>();
+// Bounded so a map left open all day doesn't grow without limit; Map keeps
+// insertion order, so the oldest entry goes first.
+const MAX_CACHED = 200;
+function remember(key: string, value: DetailedRoute | null) {
+  detailCache.set(key, value);
+  if (detailCache.size > MAX_CACHED) {
+    detailCache.delete(detailCache.keys().next().value as string);
+  }
+}
 const keyOf = (pts: LngLat[]) =>
   pts.map((p) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`).join(";");
 
@@ -42,14 +51,14 @@ export async function roadRouteDetailed(
         Array.isArray(j.legs)
       ) {
         const out = { coords: j.coords, legs: j.legs };
-        detailCache.set(key, out);
+        remember(key, out);
         return out;
       }
     }
   } catch {
     /* network error — treat as unavailable */
   }
-  detailCache.set(key, null);
+  remember(key, null);
   return null;
 }
 
