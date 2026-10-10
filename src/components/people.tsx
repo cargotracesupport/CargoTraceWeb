@@ -166,10 +166,10 @@ export function PeopleCard({
               id={`${idPrefix}_password`}
               type="text"
               required
-              minLength={6}
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 6 characters"
+              placeholder="At least 8 characters"
               className="ct-input font-mono"
             />
           </div>
@@ -390,7 +390,7 @@ function PersonRow({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="New password (leave blank to keep)"
-            minLength={6}
+            minLength={8}
             className="ct-input font-mono"
             aria-label="New password"
             autoComplete="new-password"

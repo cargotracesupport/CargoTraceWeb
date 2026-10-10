@@ -48,3 +48,21 @@ export async function pwnedCount(password: string): Promise<number | null> {
 export async function isPwned(password: string): Promise<boolean> {
   return ((await pwnedCount(password)) ?? 0) > 0;
 }
+
+/** Shortest password accepted for a driver or agent login. */
+export const MIN_PASSWORD_LENGTH = 8;
+
+/**
+ * Basic password rules, or null when the password is acceptable. bcrypt (used
+ * by Supabase Auth) ignores everything past 72 bytes, so longer passwords are
+ * refused rather than silently truncated.
+ */
+export function passwordProblem(password: string): string | null {
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+  }
+  if (new TextEncoder().encode(password).length > 72) {
+    return "Password is too long (72 bytes at most).";
+  }
+  return null;
+}

@@ -1,24 +1,31 @@
 import { NextResponse } from "next/server";
 import { getSessionProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isPwned, PWNED_MESSAGE } from "@/lib/password";
+import { isPwned, PWNED_MESSAGE, passwordProblem } from "@/lib/password";
+import { writeStaffProfile } from "@/lib/provision";
 
 export const dynamic = "force-dynamic";
 
-/** Returns the vehicle id only if it belongs to the org, else null. */
+/**
+ * Returns the vehicle id only if it belongs to the org (and, for an agent, is
+ * one of that agent's own vehicles, matching the vehicles RLS), else null.
+ */
 async function orgVehicleId(
   admin: ReturnType<typeof createAdminClient>,
   orgId: string,
   raw: unknown,
+  ownerAgentId: string | null,
 ): Promise<string | null> {
   const id = raw ? String(raw) : "";
   if (!id) return null;
-  const { data } = await admin
+  let q = admin
     .from("vehicles")
     .select("id")
     .eq("id", id)
     .eq("org_id", orgId)
-    .maybeSingle();
+    .is("deleted_at", null);
+  if (ownerAgentId) q = q.eq("agent_id", ownerAgentId);
+  const { data } = await q.maybeSingle();
   return data ? id : null;
 }
 
@@ -65,17 +72,24 @@ export async function POST(req: Request) {
   const password = String(body.password ?? "");
   const phone = body.phone ? String(body.phone).trim() : null;
 
-  if (!fullName || !email || password.length < 6) {
+  if (!fullName || !email) {
     return NextResponse.json(
-      { error: "fullName, email and password (min 6) required" },
+      { error: "fullName, email and password required" },
       { status: 400 },
     );
+  }
+  const pwProblem = passwordProblem(password);
+  if (pwProblem) {
+    return NextResponse.json({ error: pwProblem }, { status: 400 });
   }
   if (await isPwned(password)) {
     return NextResponse.json({ error: PWNED_MESSAGE }, { status: 400 });
   }
-  if (fullName.length > 120 || email.length > 200) {
-    return NextResponse.json({ error: "name or email too long" }, { status: 400 });
+  if (fullName.length > 120 || email.length > 200 || (phone ?? "").length > 32) {
+    return NextResponse.json(
+      { error: "name, email or phone too long" },
+      { status: 400 },
+    );
   }
 
   const admin = createAdminClient();
@@ -87,24 +101,20 @@ export async function POST(req: Request) {
     user_metadata: { full_name: fullName },
   });
   if (createErr || !created.user) {
+    // Auth's own message ("already registered" etc.) would let one tenant
+    // probe whether an email exists anywhere, so it stays in the logs.
+    console.error("driver createUser failed:", createErr?.message);
     return NextResponse.json(
-      { error: createErr?.message ?? "could not create user" },
+      { error: "Could not create this login. Check the email and try again." },
       { status: 400 },
     );
   }
-
-  // The signup trigger creates a default admin profile + org. Override it:
-  // attach the driver to THIS admin's org with the driver role, and drop the auto org.
-  const { data: autoProfile } = await admin
-    .from("profiles")
-    .select("org_id")
-    .eq("id", created.user.id)
-    .single();
 
   const vehicle_id = await orgVehicleId(
     admin,
     session.profile.org_id,
     body.vehicleId,
+    session.profile.role === "agent" ? session.profile.id : null,
   );
 
   // A driver created by an agent belongs to that agent; an admin picks the
@@ -114,26 +124,19 @@ export async function POST(req: Request) {
       ? session.profile.id
       : await orgAgentId(admin, session.profile.org_id, body.agentId);
 
-  const { error: profErr } = await admin
-    .from("profiles")
-    .update({
-      org_id: session.profile.org_id,
-      role: "driver",
-      full_name: fullName,
-      phone,
-      vehicle_id,
-      agent_id,
-    })
-    .eq("id", created.user.id);
-
+  const profErr = await writeStaffProfile(admin, created.user.id, {
+    org_id: session.profile.org_id,
+    role: "driver",
+    full_name: fullName,
+    phone,
+    vehicle_id,
+    agent_id,
+  });
   if (profErr) {
-    console.error("driver profile update failed:", profErr.message);
+    console.error("driver profile write failed:", profErr);
+    // Never leave a login behind without the intended profile.
+    await admin.auth.admin.deleteUser(created.user.id);
     return NextResponse.json({ error: "could not create driver" }, { status: 400 });
-  }
-
-  // Clean up the throwaway org created by the signup trigger.
-  if (autoProfile?.org_id && autoProfile.org_id !== session.profile.org_id) {
-    await admin.from("organizations").delete().eq("id", autoProfile.org_id);
   }
 
   return NextResponse.json({
@@ -184,11 +187,12 @@ export async function PATCH(req: Request) {
   if (email && (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
     return NextResponse.json({ error: "invalid email" }, { status: 400 });
   }
-  if (password && password.length < 6) {
-    return NextResponse.json(
-      { error: "password must be at least 6 characters" },
-      { status: 400 },
-    );
+  const pwProblem = password ? passwordProblem(password) : null;
+  if (pwProblem) {
+    return NextResponse.json({ error: pwProblem }, { status: 400 });
+  }
+  if ((phone ?? "").length > 32) {
+    return NextResponse.json({ error: "phone too long" }, { status: 400 });
   }
   if (password && (await isPwned(password))) {
     return NextResponse.json({ error: PWNED_MESSAGE }, { status: 400 });
@@ -225,6 +229,7 @@ export async function PATCH(req: Request) {
       admin,
       session.profile.org_id,
       body.vehicleId,
+      session.profile.role === "agent" ? session.profile.id : null,
     );
   }
   // Only an admin may reassign a driver's owning agent.
@@ -256,7 +261,7 @@ export async function PATCH(req: Request) {
     if (authErr) {
       console.error("driver credential update failed:", authErr.message);
       return NextResponse.json(
-        { error: authErr.message || "could not update login" },
+        { error: "Could not update the login. Check the email and try again." },
         { status: 400 },
       );
     }
