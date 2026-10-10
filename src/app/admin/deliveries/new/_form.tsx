@@ -28,6 +28,15 @@ const EDITABLE_STATUSES: DeliveryStatus[] = [
   "cancelled",
 ];
 
+// What an agent may set: the not-started statuses (kept coherent with the
+// drop-off and driver on save) and Cancelled. Never en route / delivered.
+const AGENT_STATUSES: DeliveryStatus[] = [
+  "awaiting_dropoff",
+  "pending",
+  "assigned",
+  "cancelled",
+];
+
 interface Created {
   token: string;
   phone: string;
@@ -1071,7 +1080,9 @@ export default function NewDeliveryForm({
         </div>
       </fieldset>
 
-      {/* Status — admin sets it directly when editing */}
+      {/* Status — set directly when editing. Admins get every status; agents
+          only the not-started ones and Cancelled (en route / delivered are the
+          driver's to record; the DB enforces this, migration 0031). */}
       {editing ? (
         <fieldset className="ct-card flex flex-col gap-3 p-5">
           <legend className="px-1 text-sm font-semibold">Status</legend>
@@ -1085,15 +1096,16 @@ export default function NewDeliveryForm({
               onChange={(e) => setStatus(e.target.value as DeliveryStatus)}
               className="ct-input"
             >
-              {EDITABLE_STATUSES.map((s) => (
+              {(ownerAgentId ? AGENT_STATUSES : EDITABLE_STATUSES).map((s) => (
                 <option key={s} value={s}>
                   {STATUS_LABEL[s]}
                 </option>
               ))}
             </select>
             <p className="mt-1 text-xs text-muted">
-              Set the status manually. Lifecycle timestamps are filled in
-              automatically when you move it forward.
+              {ownerAgentId
+                ? "Waiting / ready / assigned follow the drop-off and driver automatically. Choose Cancelled to call the delivery off."
+                : "Set the status manually. Lifecycle timestamps are filled in automatically when you move it forward."}
             </p>
           </div>
         </fieldset>
