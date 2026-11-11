@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import Spinner from "@/components/Spinner";
 import { BrandMark, Wordmark, Check, MapPin, Eye, EyeOff } from "@/components/icons";
@@ -221,6 +222,10 @@ export default function LoginForm() {
 
           <p className="mt-5 text-center text-[11px] text-muted">
             Accounts are created by your Goodswala administrator.
+            <br />
+            <Link href="/privacy" className="mt-1 inline-block underline-offset-2 hover:text-text hover:underline">
+              Privacy Policy
+            </Link>
           </p>
         </div>
       </section>

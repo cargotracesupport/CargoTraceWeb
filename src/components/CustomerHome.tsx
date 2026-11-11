@@ -364,6 +364,12 @@ export default function CustomerHome({ token }: { token?: string }) {
           ) : null}
         </>
       )}
+
+      <p className="mt-auto text-center text-xs text-muted2">
+        <Link href="/privacy" className="underline-offset-2 hover:text-text hover:underline">
+          Privacy Policy
+        </Link>
+      </p>
     </main>
   );
 }

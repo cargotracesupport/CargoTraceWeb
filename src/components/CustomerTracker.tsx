@@ -668,6 +668,10 @@ export default function CustomerTracker({
 
         <p className="pb-2 text-center text-xs text-muted2">
           Live tracking by <Wordmark className="font-semibold" />
+          {" · "}
+          <Link href="/privacy" className="underline-offset-2 hover:text-text hover:underline">
+            Privacy
+          </Link>
         </p>
       </div>
 
