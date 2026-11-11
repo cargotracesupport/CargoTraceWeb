@@ -6,6 +6,7 @@ import DeliveryStatusBadge from "@/components/DeliveryStatusBadge";
 import Spinner from "@/components/Spinner";
 import type { DeliveryStatus } from "@/lib/types";
 import { BrandMark, MapPin, Flag, Package, Search } from "@/components/icons";
+import { LegalLinks } from "@/components/legal";
 
 // Remembered credentials so a returning customer lands straight on their
 // deliveries (same device-local convention as the tracker's phone memory).
@@ -366,9 +367,7 @@ export default function CustomerHome({ token }: { token?: string }) {
       )}
 
       <p className="mt-auto text-center text-xs text-muted2">
-        <Link href="/privacy" className="underline-offset-2 hover:text-text hover:underline">
-          Privacy Policy
-        </Link>
+        <LegalLinks />
       </p>
     </main>
   );

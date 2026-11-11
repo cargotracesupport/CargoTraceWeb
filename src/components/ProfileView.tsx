@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { LegalLinks } from "@/components/legal";
 import { ROLE_LABEL, type Role } from "@/lib/types";
 import { Avatar, Contact, Phone, Check } from "@/components/icons";
 import Spinner from "@/components/Spinner";
@@ -161,10 +161,7 @@ export default function ProfileView({ initial }: { initial: ProfileInitial }) {
       </section>
 
       <p className="text-center text-xs text-muted2">
-        How we handle your data:{" "}
-        <Link href="/privacy" className="font-medium text-primary underline-offset-2 hover:underline">
-          Privacy Policy
-        </Link>
+        <LegalLinks />
       </p>
     </div>
   );

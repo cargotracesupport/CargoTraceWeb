@@ -6,6 +6,7 @@ import LiveMap, { type MapMarker } from "@/components/LiveMap";
 import DropoffSetter from "@/components/DropoffSetter";
 import { BrandMark, Wordmark, Check, MapPin, Flag, Truck, Phone, Avatar, Home } from "@/components/icons";
 import ThemeToggle from "@/components/ThemeToggle";
+import { LegalLinks } from "@/components/legal";
 import { formatEta } from "@/lib/eta";
 import { roadRouteThrough } from "@/lib/route";
 import type { DeliveryStatus } from "@/lib/types";
@@ -668,10 +669,8 @@ export default function CustomerTracker({
 
         <p className="pb-2 text-center text-xs text-muted2">
           Live tracking by <Wordmark className="font-semibold" />
-          {" · "}
-          <Link href="/privacy" className="underline-offset-2 hover:text-text hover:underline">
-            Privacy
-          </Link>
+          <br />
+          <LegalLinks />
         </p>
       </div>
 
